@@ -1,16 +1,48 @@
-﻿namespace VulkanTutorial.Models;
+﻿using Silk.NET.Core;
+using Silk.NET.Vulkan;
+using Silk.NET.Vulkan.Extensions.KHR;
+using System.Runtime.CompilerServices;
 
-public struct QueueFamilyIndices
+namespace VulkanTutorial.Models;
+
+public readonly unsafe struct QueueFamilyIndices
 {
-    public uint GraphicsFamily = uint.MaxValue;
+    private readonly uint graphicsFamily;
+    private readonly uint presentFamily;
 
-    public uint PresentFamily = uint.MaxValue;
+    public uint GraphicsFamily => graphicsFamily;
 
-    public QueueFamilyIndices()
+    public uint PresentFamily => presentFamily;
+
+    public readonly bool IsComplete => graphicsFamily != uint.MaxValue && presentFamily != uint.MaxValue;
+
+    public QueueFamilyIndices(Vk vk, KhrSurface khrSurface, PhysicalDevice device, SurfaceKHR surface)
     {
-    }
+        graphicsFamily = uint.MaxValue;
+        presentFamily = uint.MaxValue;
 
-    public readonly bool IsComplete => GraphicsFamily != uint.MaxValue && PresentFamily != uint.MaxValue;
+        uint queueFamilyCount = 0;
+        vk.GetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, null);
+
+        Span<QueueFamilyProperties> queueFamilies = stackalloc QueueFamilyProperties[(int)queueFamilyCount];
+        vk.GetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, (QueueFamilyProperties*)Unsafe.AsPointer(ref queueFamilies[0]));
+
+        for (int i = 0; i < queueFamilies.Length; i++)
+        {
+            if (queueFamilies[i].QueueFlags.HasFlag(QueueFlags.GraphicsBit))
+            {
+                graphicsFamily = (uint)i;
+            }
+
+            Bool32 presentSupport;
+            khrSurface.GetPhysicalDeviceSurfaceSupport(device, (uint)i, surface, &presentSupport);
+
+            if (presentSupport)
+            {
+                presentFamily = (uint)i;
+            }
+        }
+    }
 
     public readonly uint[] ToArray()
     {

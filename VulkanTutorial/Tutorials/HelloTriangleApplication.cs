@@ -30,14 +30,17 @@ public unsafe class HelloTriangleApplication : IDisposable
     private Vk vk = null!;
     private ExtDebugUtils debugUtils = null!;
     private KhrSurface khrSurface = null!;
+    private KhrSwapchain khrSwapchain = null!;
 
     private Instance instance;
     private PhysicalDevice physicalDevice;
     private Device device;
     private Queue graphicsQueue;
     private Queue presentQueue;
+    private SwapchainKHR swapchain;
 
     private QueueFamilyIndices queueFamilyIndices;
+    private SwapChainSupportDetails swapChainSupportDetails;
 
     private DebugUtilsMessengerEXT debugMessenger;
     private SurfaceKHR surface;
@@ -67,6 +70,7 @@ public unsafe class HelloTriangleApplication : IDisposable
         CreateSurface();
         PickPhysicalDevice();
         CreateLogicalDevice();
+        CreateSwapChain();
     }
 
     /// <summary>
@@ -174,10 +178,15 @@ public unsafe class HelloTriangleApplication : IDisposable
 
         foreach (PhysicalDevice device in devices)
         {
-            if (IsDeviceSuitable(device) && FindQueueFamilies(device) is QueueFamilyIndices temp)
+            if (IsDeviceSuitable(device)
+                && new QueueFamilyIndices(vk, khrSurface, device, surface) is QueueFamilyIndices temp1
+                && temp1.IsComplete
+                && new SwapChainSupportDetails(khrSurface, device, surface) is SwapChainSupportDetails temp2
+                && temp2.IsAdequate)
             {
                 physicalDevice = device;
-                queueFamilyIndices = temp;
+                queueFamilyIndices = temp1;
+                swapChainSupportDetails = temp2;
 
                 break;
             }
@@ -236,8 +245,59 @@ public unsafe class HelloTriangleApplication : IDisposable
             throw new Exception("创建逻辑设备失败。");
         }
 
+        if (!vk.TryGetDeviceExtension(instance, device, out khrSwapchain))
+        {
+            throw new Exception("找不到交换链扩展。");
+        }
+
         vk.GetDeviceQueue(device, queueFamilyIndices.GraphicsFamily, 0, out graphicsQueue);
         vk.GetDeviceQueue(device, queueFamilyIndices.PresentFamily, 0, out presentQueue);
+    }
+
+    /// <summary>
+    /// 创建交换链。
+    /// </summary>
+    private void CreateSwapChain()
+    {
+        SurfaceFormatKHR surfaceFormat = swapChainSupportDetails.ChooseSwapSurfaceFormat();
+        PresentModeKHR presentMode = swapChainSupportDetails.ChooseSwapPresentMode();
+        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+        uint imageCount = swapChainSupportDetails.GetImageCount();
+
+        SwapchainCreateInfoKHR createInfo = new()
+        {
+            SType = StructureType.SwapchainCreateInfoKhr,
+            Surface = surface,
+            MinImageCount = imageCount,
+            ImageFormat = surfaceFormat.Format,
+            ImageColorSpace = surfaceFormat.ColorSpace,
+            PresentMode = presentMode,
+            ImageExtent = extent,
+            ImageArrayLayers = 1,
+            ImageUsage = ImageUsageFlags.ColorAttachmentBit,
+            PreTransform = swapChainSupportDetails.Capabilities.CurrentTransform,
+            CompositeAlpha = CompositeAlphaFlagsKHR.OpaqueBitKhr,
+            Clipped = Vk.True,
+            OldSwapchain = default
+        };
+
+        if (queueFamilyIndices.GraphicsFamily != queueFamilyIndices.PresentFamily)
+        {
+            uint[] indices = queueFamilyIndices.ToArray();
+
+            createInfo.ImageSharingMode = SharingMode.Concurrent;
+            createInfo.QueueFamilyIndexCount = (uint)indices.Length;
+            createInfo.PQueueFamilyIndices = (uint*)Unsafe.AsPointer(ref indices[0]);
+        }
+        else
+        {
+            createInfo.ImageSharingMode = SharingMode.Exclusive;
+        }
+
+        if (khrSwapchain.CreateSwapchain(device, &createInfo, null, out swapchain) != Result.Success)
+        {
+            throw new Exception("创建交换链失败。");
+        }
     }
 
     /// <summary>
@@ -260,40 +320,6 @@ public unsafe class HelloTriangleApplication : IDisposable
     }
 
     /// <summary>
-    /// 查找所需的队列族。
-    /// </summary>
-    /// <param name="device">device</param>
-    /// <returns></returns>
-    private QueueFamilyIndices? FindQueueFamilies(PhysicalDevice device)
-    {
-        QueueFamilyIndices queueFamilyIndices = new();
-
-        uint queueFamilyCount = 0;
-        vk.GetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, null);
-
-        Span<QueueFamilyProperties> queueFamilies = stackalloc QueueFamilyProperties[(int)queueFamilyCount];
-        vk.GetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, (QueueFamilyProperties*)Unsafe.AsPointer(ref queueFamilies[0]));
-
-        for (int i = 0; i < queueFamilies.Length; i++)
-        {
-            if (queueFamilies[i].QueueFlags.HasFlag(QueueFlags.GraphicsBit))
-            {
-                queueFamilyIndices.GraphicsFamily = (uint)i;
-            }
-
-            Bool32 presentSupport;
-            khrSurface.GetPhysicalDeviceSurfaceSupport(device, (uint)i, surface, &presentSupport);
-
-            if (presentSupport)
-            {
-                queueFamilyIndices.PresentFamily = (uint)i;
-            }
-        }
-
-        return queueFamilyIndices.IsComplete ? queueFamilyIndices : null;
-    }
-
-    /// <summary>
     /// 调试消息回调。
     /// </summary>
     /// <param name="messageSeverity">messageSeverity</param>
@@ -310,6 +336,10 @@ public unsafe class HelloTriangleApplication : IDisposable
 
     public void Dispose()
     {
+        khrSwapchain.DestroySwapchain(device, swapchain, null);
+
+        khrSwapchain.Dispose();
+
         vk.DestroyDevice(device, null);
 
         debugUtils?.DestroyDebugUtilsMessenger(instance, debugMessenger, null);
