@@ -8,7 +8,7 @@ internal class Program
     {
         _ = args;
 
-        HelloTriangleApplication app = new();
+        using HelloTriangleApplication app = new();
 
         app.Run();
     }
