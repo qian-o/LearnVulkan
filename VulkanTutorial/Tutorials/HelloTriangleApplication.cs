@@ -7,6 +7,7 @@ using Silk.NET.Windowing;
 using System.Runtime.CompilerServices;
 using VulkanTutorial.Helpers;
 using VulkanTutorial.Models;
+using Semaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace VulkanTutorial.Tutorials;
 
@@ -14,6 +15,7 @@ public unsafe class HelloTriangleApplication : IDisposable
 {
     private const uint Width = 800;
     private const uint Height = 600;
+    private const int MaxFramesInFlight = 2;
 
     private static readonly string[] ValidationLayers = new string[]
     {
@@ -44,6 +46,14 @@ public unsafe class HelloTriangleApplication : IDisposable
     private RenderPass renderPass;
     private PipelineLayout pipelineLayout;
     private Pipeline graphicsPipeline;
+    private Framebuffer[] swapchainFramebuffers = null!;
+    private CommandPool commandPool;
+    private CommandBuffer[] commandBuffers = null!;
+    private Semaphore[] imageAvailableSemaphores = null!;
+    private Semaphore[] renderFinishedSemaphores = null!;
+    private Fence[] inFlightFences = null!;
+
+    private uint currentFrame = 0;
 
     private QueueFamilyIndices queueFamilyIndices;
     private SwapChainSupportDetails swapChainSupportDetails;
@@ -59,6 +69,7 @@ public unsafe class HelloTriangleApplication : IDisposable
         window = Window.Create(options);
 
         window.Load += InitVulkan;
+        window.Render += DrawFrame;
 
         window.Run();
     }
@@ -79,6 +90,68 @@ public unsafe class HelloTriangleApplication : IDisposable
         CreateImageViews();
         CreateRenderPass();
         CreateGraphicsPipeline();
+        CreateFramebuffers();
+        CreateCommandPool();
+        CreateCommandBuffer();
+        CreateSyncObjects();
+    }
+
+    /// <summary>
+    /// 绘制帧。
+    /// </summary>
+    /// <param name="obj">obj</param>
+    private void DrawFrame(double obj)
+    {
+        vk.WaitForFences(device, 1, inFlightFences[currentFrame], Vk.True, ulong.MaxValue);
+        vk.ResetFences(device, 1, inFlightFences[currentFrame]);
+
+        uint imageIndex;
+        khrSwapchain.AcquireNextImage(device, swapchain, ulong.MaxValue, imageAvailableSemaphores[currentFrame], default, &imageIndex);
+
+        vk.ResetCommandBuffer(commandBuffers[currentFrame], 0);
+
+        RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+
+        Semaphore[] waitSemaphores = new[] { imageAvailableSemaphores[currentFrame] };
+        PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
+        CommandBuffer[] commands = new[] { commandBuffers[currentFrame] };
+        Semaphore[] signalSemaphores = new[] { renderFinishedSemaphores[currentFrame] };
+
+        SubmitInfo submitInfo = new()
+        {
+            SType = StructureType.SubmitInfo,
+            WaitSemaphoreCount = (uint)waitSemaphores.Length,
+            PWaitSemaphores = (Semaphore*)Unsafe.AsPointer(ref waitSemaphores[0]),
+            PWaitDstStageMask = (PipelineStageFlags*)Unsafe.AsPointer(ref waitStages[0]),
+            CommandBufferCount = (uint)commands.Length,
+            PCommandBuffers = (CommandBuffer*)Unsafe.AsPointer(ref commands[0]),
+            SignalSemaphoreCount = (uint)signalSemaphores.Length,
+            PSignalSemaphores = (Semaphore*)Unsafe.AsPointer(ref signalSemaphores[0])
+        };
+
+        if (vk.QueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != Result.Success)
+        {
+            throw new Exception("提交绘制命令缓冲区失败。");
+        }
+
+        SwapchainKHR[] swapChains = new[] { swapchain };
+
+        PresentInfoKHR presentInfo = new()
+        {
+            SType = StructureType.PresentInfoKhr,
+            WaitSemaphoreCount = (uint)signalSemaphores.Length,
+            PWaitSemaphores = (Semaphore*)Unsafe.AsPointer(ref signalSemaphores[0]),
+            SwapchainCount = (uint)swapChains.Length,
+            PSwapchains = (SwapchainKHR*)Unsafe.AsPointer(ref swapChains[0]),
+            PImageIndices = &imageIndex
+        };
+
+        if (khrSwapchain.QueuePresent(presentQueue, &presentInfo) != Result.Success)
+        {
+            throw new Exception("提交呈现命令失败。");
+        }
+
+        currentFrame = (currentFrame + 1) % MaxFramesInFlight;
     }
 
     /// <summary>
@@ -388,13 +461,25 @@ public unsafe class HelloTriangleApplication : IDisposable
             PColorAttachments = &colorAttachmentRef
         };
 
+        SubpassDependency dependency = new()
+        {
+            SrcSubpass = Vk.SubpassExternal,
+            DstSubpass = 0,
+            SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+            SrcAccessMask = 0,
+            DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+            DstAccessMask = AccessFlags.ColorAttachmentWriteBit
+        };
+
         RenderPassCreateInfo renderPassInfo = new()
         {
             SType = StructureType.RenderPassCreateInfo,
             AttachmentCount = 1,
             PAttachments = &colorAttachment,
             SubpassCount = 1,
-            PSubpasses = &subpass
+            PSubpasses = &subpass,
+            DependencyCount = 1,
+            PDependencies = &dependency
         };
 
         if (vk.CreateRenderPass(device, &renderPassInfo, null, out renderPass) != Result.Success)
@@ -578,6 +663,194 @@ public unsafe class HelloTriangleApplication : IDisposable
     }
 
     /// <summary>
+    /// 创建帧缓冲。
+    /// </summary>
+    private void CreateFramebuffers()
+    {
+        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+
+        swapchainFramebuffers = new Framebuffer[swapchainImageViews.Length];
+
+        for (int i = 0; i < swapchainFramebuffers.Length; i++)
+        {
+            ImageView[] attachments = new ImageView[]
+            {
+                swapchainImageViews[i]
+            };
+
+            FramebufferCreateInfo framebufferInfo = new()
+            {
+                SType = StructureType.FramebufferCreateInfo,
+                RenderPass = renderPass,
+                AttachmentCount = (uint)attachments.Length,
+                PAttachments = (ImageView*)Unsafe.AsPointer(ref attachments[0]),
+                Width = extent.Width,
+                Height = extent.Height,
+                Layers = 1
+            };
+
+            if (vk.CreateFramebuffer(device, &framebufferInfo, null, out swapchainFramebuffers[i]) != Result.Success)
+            {
+                throw new Exception("创建帧缓冲失败。");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 创建命令池。
+    /// </summary>
+    private void CreateCommandPool()
+    {
+        CommandPoolCreateInfo poolInfo = new()
+        {
+            SType = StructureType.CommandPoolCreateInfo,
+            Flags = CommandPoolCreateFlags.ResetCommandBufferBit,
+            QueueFamilyIndex = queueFamilyIndices.GraphicsFamily
+        };
+
+        if (vk.CreateCommandPool(device, &poolInfo, null, out commandPool) != Result.Success)
+        {
+            throw new Exception("创建命令池失败。");
+        }
+    }
+
+    /// <summary>
+    /// 创建命令缓冲。
+    /// </summary>
+    private void CreateCommandBuffer()
+    {
+        commandBuffers = new CommandBuffer[swapchainFramebuffers.Length];
+
+        CommandBufferAllocateInfo allocateInfo = new()
+        {
+            SType = StructureType.CommandBufferAllocateInfo,
+            CommandPool = commandPool,
+            Level = CommandBufferLevel.Primary,
+            CommandBufferCount = (uint)commandBuffers.Length
+        };
+
+        if (vk.AllocateCommandBuffers(device, &allocateInfo, (CommandBuffer*)Unsafe.AsPointer(ref commandBuffers[0])) != Result.Success)
+        {
+            throw new Exception("创建命令缓冲失败。");
+        }
+    }
+
+    /// <summary>
+    /// 记录命令缓冲。
+    /// </summary>
+    /// <param name="commandBuffer">commandBuffer</param>
+    /// <param name="imageIndex">imageIndex</param>
+    private void RecordCommandBuffer(CommandBuffer commandBuffer, uint imageIndex)
+    {
+        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+
+        CommandBufferBeginInfo beginInfo = new()
+        {
+            SType = StructureType.CommandBufferBeginInfo
+        };
+
+        if (vk.BeginCommandBuffer(commandBuffer, &beginInfo) != Result.Success)
+        {
+            throw new Exception("开始记录命令缓冲失败。");
+        }
+
+        RenderPassBeginInfo renderPassBeginInfo = new()
+        {
+            SType = StructureType.RenderPassBeginInfo,
+            RenderPass = renderPass,
+            Framebuffer = swapchainFramebuffers[imageIndex],
+            RenderArea = new Rect2D
+            {
+                Offset = new Offset2D
+                {
+                    X = 0,
+                    Y = 0
+                },
+                Extent = extent
+            }
+        };
+
+        ClearValue clearColor = new()
+        {
+            Color = new ClearColorValue
+            {
+                Float32_0 = 0.0f,
+                Float32_1 = 0.0f,
+                Float32_2 = 0.0f,
+                Float32_3 = 1.0f
+            }
+        };
+        renderPassBeginInfo.ClearValueCount = 1;
+        renderPassBeginInfo.PClearValues = &clearColor;
+
+        vk.CmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, SubpassContents.Inline);
+
+        vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, graphicsPipeline);
+
+        Viewport viewport = new()
+        {
+            X = 0.0f,
+            Y = 0.0f,
+            Width = extent.Width,
+            Height = extent.Height,
+            MinDepth = 0.0f,
+            MaxDepth = 1.0f
+        };
+        vk.CmdSetViewport(commandBuffer, 0, 1, viewport);
+
+        Rect2D scissor = new()
+        {
+            Offset = new Offset2D
+            {
+                X = 0,
+                Y = 0
+            },
+            Extent = extent
+        };
+        vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
+
+        vk.CmdDraw(commandBuffer, 3, 1, 0, 0);
+
+        vk.CmdEndRenderPass(commandBuffer);
+
+        if (vk.EndCommandBuffer(commandBuffer) != Result.Success)
+        {
+            throw new Exception("结束记录命令缓冲失败。");
+        }
+    }
+
+    /// <summary>
+    /// 创建同步对象。
+    /// </summary>
+    private void CreateSyncObjects()
+    {
+        imageAvailableSemaphores = new Semaphore[MaxFramesInFlight];
+        renderFinishedSemaphores = new Semaphore[MaxFramesInFlight];
+        inFlightFences = new Fence[MaxFramesInFlight];
+
+        SemaphoreCreateInfo semaphoreInfo = new()
+        {
+            SType = StructureType.SemaphoreCreateInfo
+        };
+
+        FenceCreateInfo fenceInfo = new()
+        {
+            SType = StructureType.FenceCreateInfo,
+            Flags = FenceCreateFlags.SignaledBit
+        };
+
+        for (int i = 0; i < MaxFramesInFlight; i++)
+        {
+            if (vk.CreateSemaphore(device, &semaphoreInfo, null, out imageAvailableSemaphores[i]) != Result.Success
+                || vk.CreateSemaphore(device, &semaphoreInfo, null, out renderFinishedSemaphores[i]) != Result.Success
+                || vk.CreateFence(device, &fenceInfo, null, out inFlightFences[i]) != Result.Success)
+            {
+                throw new Exception("创建同步对象失败。");
+            }
+        }
+    }
+
+    /// <summary>
     /// 检查物理设备是否适合。
     /// </summary>
     /// <param name="device">device</param>
@@ -613,6 +886,22 @@ public unsafe class HelloTriangleApplication : IDisposable
 
     public void Dispose()
     {
+        vk.DeviceWaitIdle(device);
+
+        for (int i = 0; i < MaxFramesInFlight; i++)
+        {
+            vk.DestroySemaphore(device, renderFinishedSemaphores[i], null);
+            vk.DestroySemaphore(device, imageAvailableSemaphores[i], null);
+            vk.DestroyFence(device, inFlightFences[i], null);
+        }
+
+        vk.DestroyCommandPool(device, commandPool, null);
+
+        foreach (Framebuffer framebuffer in swapchainFramebuffers)
+        {
+            vk.DestroyFramebuffer(device, framebuffer, null);
+        }
+
         vk.DestroyPipeline(device, graphicsPipeline, null);
 
         vk.DestroyPipelineLayout(device, pipelineLayout, null);
