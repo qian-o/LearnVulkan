@@ -33,17 +33,22 @@ public unsafe class HelloTriangleApplication : IDisposable
     private KhrSwapchain khrSwapchain = null!;
 
     private Instance instance;
+    private SurfaceKHR surface;
     private PhysicalDevice physicalDevice;
     private Device device;
     private Queue graphicsQueue;
     private Queue presentQueue;
     private SwapchainKHR swapchain;
+    private Image[] swapchainImages = null!;
+    private ImageView[] swapchainImageViews = null!;
+    private RenderPass renderPass;
+    private PipelineLayout pipelineLayout;
+    private Pipeline graphicsPipeline;
 
     private QueueFamilyIndices queueFamilyIndices;
     private SwapChainSupportDetails swapChainSupportDetails;
 
     private DebugUtilsMessengerEXT debugMessenger;
-    private SurfaceKHR surface;
 
     public void Run()
     {
@@ -71,6 +76,9 @@ public unsafe class HelloTriangleApplication : IDisposable
         PickPhysicalDevice();
         CreateLogicalDevice();
         CreateSwapChain();
+        CreateImageViews();
+        CreateRenderPass();
+        CreateGraphicsPipeline();
     }
 
     /// <summary>
@@ -298,6 +306,275 @@ public unsafe class HelloTriangleApplication : IDisposable
         {
             throw new Exception("创建交换链失败。");
         }
+
+        khrSwapchain.GetSwapchainImages(device, swapchain, &imageCount, null);
+
+        swapchainImages = new Image[imageCount];
+
+        fixed (Image* pSwapchainImages = swapchainImages)
+        {
+            khrSwapchain.GetSwapchainImages(device, swapchain, &imageCount, pSwapchainImages);
+        }
+    }
+
+    /// <summary>
+    /// 创建图像视图。
+    /// </summary>
+    private void CreateImageViews()
+    {
+        SurfaceFormatKHR surfaceFormat = swapChainSupportDetails.ChooseSwapSurfaceFormat();
+
+        swapchainImageViews = new ImageView[swapchainImages.Length];
+
+        for (int i = 0; i < swapchainImages.Length; i++)
+        {
+            ImageViewCreateInfo createInfo = new()
+            {
+                SType = StructureType.ImageViewCreateInfo,
+                Image = swapchainImages[i],
+                ViewType = ImageViewType.Type2D,
+                Format = surfaceFormat.Format,
+                Components = new ComponentMapping
+                {
+                    R = ComponentSwizzle.Identity,
+                    G = ComponentSwizzle.Identity,
+                    B = ComponentSwizzle.Identity,
+                    A = ComponentSwizzle.Identity
+                },
+                SubresourceRange = new ImageSubresourceRange
+                {
+                    AspectMask = ImageAspectFlags.ColorBit,
+                    BaseMipLevel = 0,
+                    LevelCount = 1,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1
+                }
+            };
+
+            if (vk.CreateImageView(device, &createInfo, null, out swapchainImageViews[i]) != Result.Success)
+            {
+                throw new Exception("创建图像视图失败。");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 创建渲染通道。
+    /// </summary>
+    private void CreateRenderPass()
+    {
+        AttachmentDescription colorAttachment = new()
+        {
+            Format = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format,
+            Samples = SampleCountFlags.Count1Bit,
+            LoadOp = AttachmentLoadOp.Clear,
+            StoreOp = AttachmentStoreOp.Store,
+            StencilLoadOp = AttachmentLoadOp.DontCare,
+            StencilStoreOp = AttachmentStoreOp.DontCare,
+            InitialLayout = ImageLayout.Undefined,
+            FinalLayout = ImageLayout.PresentSrcKhr
+        };
+
+        AttachmentReference colorAttachmentRef = new()
+        {
+            Attachment = 0,
+            Layout = ImageLayout.ColorAttachmentOptimal
+        };
+
+        SubpassDescription subpass = new()
+        {
+            PipelineBindPoint = PipelineBindPoint.Graphics,
+            ColorAttachmentCount = 1,
+            PColorAttachments = &colorAttachmentRef
+        };
+
+        RenderPassCreateInfo renderPassInfo = new()
+        {
+            SType = StructureType.RenderPassCreateInfo,
+            AttachmentCount = 1,
+            PAttachments = &colorAttachment,
+            SubpassCount = 1,
+            PSubpasses = &subpass
+        };
+
+        if (vk.CreateRenderPass(device, &renderPassInfo, null, out renderPass) != Result.Success)
+        {
+            throw new Exception("创建渲染通道失败。");
+        }
+    }
+
+    /// <summary>
+    /// 创建图形管线。
+    /// </summary>
+    private void CreateGraphicsPipeline()
+    {
+        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+
+        ShaderModule vertShaderModule = vk.CreateShaderModule(device, "Shaders/vert.spv");
+        ShaderModule fragShaderModule = vk.CreateShaderModule(device, "Shaders/frag.spv");
+
+        PipelineShaderStageCreateInfo vertShaderStageCreateInfo = new()
+        {
+            SType = StructureType.PipelineShaderStageCreateInfo,
+            Stage = ShaderStageFlags.VertexBit,
+            Module = vertShaderModule,
+            PName = Utils.StringToPointer("main")
+        };
+
+        PipelineShaderStageCreateInfo fragShaderStageCreateInfo = new()
+        {
+            SType = StructureType.PipelineShaderStageCreateInfo,
+            Stage = ShaderStageFlags.FragmentBit,
+            Module = fragShaderModule,
+            PName = Utils.StringToPointer("main")
+        };
+
+        // 着色器阶段
+        PipelineShaderStageCreateInfo[] shaderStageCreateInfos = new PipelineShaderStageCreateInfo[]
+        {
+            vertShaderStageCreateInfo,
+            fragShaderStageCreateInfo
+        };
+
+        // 动态状态
+        DynamicState[] dynamicStates = new DynamicState[]
+        {
+            DynamicState.Viewport,
+            DynamicState.Scissor
+        };
+
+        PipelineDynamicStateCreateInfo dynamicState = new()
+        {
+            SType = StructureType.PipelineDynamicStateCreateInfo,
+            DynamicStateCount = (uint)dynamicStates.Length,
+            PDynamicStates = (DynamicState*)Unsafe.AsPointer(ref dynamicStates[0])
+        };
+
+        // 顶点输入
+        PipelineVertexInputStateCreateInfo vertexInputInfo = new()
+        {
+            SType = StructureType.PipelineVertexInputStateCreateInfo
+        };
+
+        // 输入组装
+        PipelineInputAssemblyStateCreateInfo inputAssembly = new()
+        {
+            SType = StructureType.PipelineInputAssemblyStateCreateInfo,
+            Topology = PrimitiveTopology.TriangleList,
+            PrimitiveRestartEnable = Vk.False
+        };
+
+        // 视口和裁剪
+        Viewport viewport = new()
+        {
+            X = 0.0f,
+            Y = 0.0f,
+            Width = extent.Width,
+            Height = extent.Height,
+            MinDepth = 0.0f,
+            MaxDepth = 1.0f
+        };
+
+        Rect2D scissor = new()
+        {
+            Offset = new Offset2D
+            {
+                X = 0,
+                Y = 0
+            },
+            Extent = extent
+        };
+
+        PipelineViewportStateCreateInfo viewportState = new()
+        {
+            SType = StructureType.PipelineViewportStateCreateInfo,
+            ViewportCount = 1,
+            PViewports = &viewport,
+            ScissorCount = 1,
+            PScissors = &scissor
+        };
+
+        // 光栅化
+        PipelineRasterizationStateCreateInfo rasterizer = new()
+        {
+            SType = StructureType.PipelineRasterizationStateCreateInfo,
+            DepthClampEnable = Vk.False,
+            RasterizerDiscardEnable = Vk.False,
+            PolygonMode = PolygonMode.Fill,
+            LineWidth = 1.0f,
+            CullMode = CullModeFlags.BackBit,
+            FrontFace = FrontFace.Clockwise,
+            DepthBiasEnable = Vk.False
+        };
+
+        // 多重采样
+        PipelineMultisampleStateCreateInfo multisampling = new()
+        {
+            SType = StructureType.PipelineMultisampleStateCreateInfo,
+            SampleShadingEnable = Vk.False,
+            RasterizationSamples = SampleCountFlags.Count1Bit
+        };
+
+        // 深度和模板测试（暂时不用）
+
+        // 颜色混合
+        PipelineColorBlendAttachmentState colorBlendAttachment = new()
+        {
+            ColorWriteMask = ColorComponentFlags.RBit
+                             | ColorComponentFlags.GBit
+                             | ColorComponentFlags.BBit
+                             | ColorComponentFlags.ABit,
+            BlendEnable = Vk.False
+        };
+
+        PipelineColorBlendStateCreateInfo colorBlending = new()
+        {
+            SType = StructureType.PipelineColorBlendStateCreateInfo,
+            LogicOpEnable = Vk.False,
+            LogicOp = LogicOp.Copy,
+            AttachmentCount = 1,
+            PAttachments = &colorBlendAttachment
+        };
+
+        // 管线布局
+        PipelineLayoutCreateInfo pipelineLayoutInfo = new()
+        {
+            SType = StructureType.PipelineLayoutCreateInfo
+        };
+
+        if (vk.CreatePipelineLayout(device, &pipelineLayoutInfo, null, out pipelineLayout) != Result.Success)
+        {
+            throw new Exception("创建管线布局失败。");
+        }
+
+        // 创建管线
+        GraphicsPipelineCreateInfo pipelineInfo = new()
+        {
+            SType = StructureType.GraphicsPipelineCreateInfo,
+            StageCount = (uint)shaderStageCreateInfos.Length,
+            PStages = (PipelineShaderStageCreateInfo*)Unsafe.AsPointer(ref shaderStageCreateInfos[0]),
+            PVertexInputState = &vertexInputInfo,
+            PInputAssemblyState = &inputAssembly,
+            PViewportState = &viewportState,
+            PRasterizationState = &rasterizer,
+            PMultisampleState = &multisampling,
+            PDepthStencilState = null,
+            PColorBlendState = &colorBlending,
+            PDynamicState = &dynamicState,
+            Layout = pipelineLayout,
+            RenderPass = renderPass,
+            Subpass = 0,
+            BasePipelineHandle = default,
+            BasePipelineIndex = -1
+        };
+
+        if (vk.CreateGraphicsPipelines(device, default, 1, &pipelineInfo, null, out graphicsPipeline) != Result.Success)
+        {
+            throw new Exception("创建图形管线失败。");
+        }
+
+        vk.DestroyShaderModule(device, fragShaderModule, null);
+        vk.DestroyShaderModule(device, vertShaderModule, null);
     }
 
     /// <summary>
@@ -336,6 +613,17 @@ public unsafe class HelloTriangleApplication : IDisposable
 
     public void Dispose()
     {
+        vk.DestroyPipeline(device, graphicsPipeline, null);
+
+        vk.DestroyPipelineLayout(device, pipelineLayout, null);
+
+        vk.DestroyRenderPass(device, renderPass, null);
+
+        foreach (ImageView imageView in swapchainImageViews)
+        {
+            vk.DestroyImageView(device, imageView, null);
+        }
+
         khrSwapchain.DestroySwapchain(device, swapchain, null);
 
         khrSwapchain.Dispose();

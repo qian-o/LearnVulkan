@@ -75,4 +75,39 @@ public static unsafe class VulkanExtensions
 
         return requiredExtensions.Count == 0;
     }
+
+    /// <summary>
+    /// 创建着色器模块。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="device">device</param>
+    /// <param name="file">file</param>
+    /// <returns></returns>
+    /// <exception cref="FileNotFoundException"></exception>
+    public static ShaderModule CreateShaderModule(this Vk vk, Device device, string file)
+    {
+        if (!File.Exists(file))
+        {
+            throw new FileNotFoundException(file);
+        }
+
+        byte[] code = File.ReadAllBytes(file);
+
+        fixed (byte* pCode = code)
+        {
+            ShaderModuleCreateInfo createInfo = new()
+            {
+                SType = StructureType.ShaderModuleCreateInfo,
+                CodeSize = (nuint)code.Length,
+                PCode = (uint*)pCode
+            };
+
+            if (vk.CreateShaderModule(device, &createInfo, null, out ShaderModule shaderModule) != Result.Success)
+            {
+                throw new Exception("无法创建着色器模块！");
+            }
+
+            return shaderModule;
+        }
+    }
 }

@@ -16,4 +16,13 @@
 		<PackageReference Include="Silk.NET.Windowing" Version="2.18.0" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<None Update="Shaders\frag.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\vert.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
 </Project>
