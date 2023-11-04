@@ -54,6 +54,7 @@ public unsafe class HelloTriangleApplication : IDisposable
     private Fence[] inFlightFences = null!;
 
     private uint currentFrame = 0;
+    private bool framebufferResized = true;
 
     private QueueFamilyIndices queueFamilyIndices;
     private SwapChainSupportDetails swapChainSupportDetails;
@@ -70,6 +71,7 @@ public unsafe class HelloTriangleApplication : IDisposable
 
         window.Load += InitVulkan;
         window.Render += DrawFrame;
+        window.FramebufferResize += FramebufferResize;
 
         window.Run();
     }
@@ -102,11 +104,27 @@ public unsafe class HelloTriangleApplication : IDisposable
     /// <param name="obj">obj</param>
     private void DrawFrame(double obj)
     {
+        if (!framebufferResized)
+        {
+            return;
+        }
+
         vk.WaitForFences(device, 1, inFlightFences[currentFrame], Vk.True, ulong.MaxValue);
-        vk.ResetFences(device, 1, inFlightFences[currentFrame]);
 
         uint imageIndex;
-        khrSwapchain.AcquireNextImage(device, swapchain, ulong.MaxValue, imageAvailableSemaphores[currentFrame], default, &imageIndex);
+        Result result = khrSwapchain.AcquireNextImage(device, swapchain, ulong.MaxValue, imageAvailableSemaphores[currentFrame], default, &imageIndex);
+        if (result == Result.ErrorOutOfDateKhr)
+        {
+            framebufferResized = false;
+
+            return;
+        }
+        else if (result != Result.Success && result != Result.SuboptimalKhr)
+        {
+            throw new Exception("获取交换链图像失败。");
+        }
+
+        vk.ResetFences(device, 1, inFlightFences[currentFrame]);
 
         vk.ResetCommandBuffer(commandBuffers[currentFrame], 0);
 
@@ -146,12 +164,24 @@ public unsafe class HelloTriangleApplication : IDisposable
             PImageIndices = &imageIndex
         };
 
-        if (khrSwapchain.QueuePresent(presentQueue, &presentInfo) != Result.Success)
+        result = khrSwapchain.QueuePresent(presentQueue, &presentInfo);
+        if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
+        {
+            framebufferResized = false;
+        }
+        else if (result != Result.Success)
         {
             throw new Exception("提交呈现命令失败。");
         }
 
         currentFrame = (currentFrame + 1) % MaxFramesInFlight;
+    }
+
+    private void FramebufferResize(Vector2D<int> obj)
+    {
+        RecreateSwapChain();
+
+        framebufferResized = true;
     }
 
     /// <summary>
@@ -260,14 +290,12 @@ public unsafe class HelloTriangleApplication : IDisposable
         foreach (PhysicalDevice device in devices)
         {
             if (IsDeviceSuitable(device)
-                && new QueueFamilyIndices(vk, khrSurface, device, surface) is QueueFamilyIndices temp1
-                && temp1.IsComplete
-                && new SwapChainSupportDetails(khrSurface, device, surface) is SwapChainSupportDetails temp2
-                && temp2.IsAdequate)
+                && new QueueFamilyIndices(vk, khrSurface, device, surface) is QueueFamilyIndices temp
+                && temp.IsComplete
+                && new SwapChainSupportDetails(khrSurface, device, surface).IsAdequate)
             {
                 physicalDevice = device;
-                queueFamilyIndices = temp1;
-                swapChainSupportDetails = temp2;
+                queueFamilyIndices = temp;
 
                 break;
             }
@@ -340,6 +368,8 @@ public unsafe class HelloTriangleApplication : IDisposable
     /// </summary>
     private void CreateSwapChain()
     {
+        swapChainSupportDetails = new SwapChainSupportDetails(khrSurface, physicalDevice, surface);
+
         SurfaceFormatKHR surfaceFormat = swapChainSupportDetails.ChooseSwapSurfaceFormat();
         PresentModeKHR presentMode = swapChainSupportDetails.ChooseSwapPresentMode();
         Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
@@ -851,6 +881,46 @@ public unsafe class HelloTriangleApplication : IDisposable
     }
 
     /// <summary>
+    /// 重新创建交换链。
+    /// </summary>
+    private void RecreateSwapChain()
+    {
+        Vector2D<int> size = window.FramebufferSize;
+        while (size.X == 0 || size.Y == 0)
+        {
+            size = window.FramebufferSize;
+
+            window.DoEvents();
+        }
+
+        vk.DeviceWaitIdle(device);
+
+        CleanupSwapChain();
+
+        CreateSwapChain();
+        CreateImageViews();
+        CreateFramebuffers();
+    }
+
+    /// <summary>
+    /// 清除交换链。
+    /// </summary>
+    private void CleanupSwapChain()
+    {
+        for (int i = 0; i < swapchainFramebuffers.Length; i++)
+        {
+            vk.DestroyFramebuffer(device, swapchainFramebuffers[i], null);
+        }
+
+        for (int i = 0; i < swapchainImageViews.Length; i++)
+        {
+            vk.DestroyImageView(device, swapchainImageViews[i], null);
+        }
+
+        khrSwapchain.DestroySwapchain(device, swapchain, null);
+    }
+
+    /// <summary>
     /// 检查物理设备是否适合。
     /// </summary>
     /// <param name="device">device</param>
@@ -886,7 +956,13 @@ public unsafe class HelloTriangleApplication : IDisposable
 
     public void Dispose()
     {
-        vk.DeviceWaitIdle(device);
+        CleanupSwapChain();
+
+        vk.DestroyPipeline(device, graphicsPipeline, null);
+
+        vk.DestroyPipelineLayout(device, pipelineLayout, null);
+
+        vk.DestroyRenderPass(device, renderPass, null);
 
         for (int i = 0; i < MaxFramesInFlight; i++)
         {
@@ -897,23 +973,7 @@ public unsafe class HelloTriangleApplication : IDisposable
 
         vk.DestroyCommandPool(device, commandPool, null);
 
-        foreach (Framebuffer framebuffer in swapchainFramebuffers)
-        {
-            vk.DestroyFramebuffer(device, framebuffer, null);
-        }
-
-        vk.DestroyPipeline(device, graphicsPipeline, null);
-
-        vk.DestroyPipelineLayout(device, pipelineLayout, null);
-
-        vk.DestroyRenderPass(device, renderPass, null);
-
-        foreach (ImageView imageView in swapchainImageViews)
-        {
-            vk.DestroyImageView(device, imageView, null);
-        }
-
-        khrSwapchain.DestroySwapchain(device, swapchain, null);
+        vk.DeviceWaitIdle(device);
 
         khrSwapchain.Dispose();
 
@@ -921,10 +981,10 @@ public unsafe class HelloTriangleApplication : IDisposable
 
         debugUtils?.DestroyDebugUtilsMessenger(instance, debugMessenger, null);
 
+        vk.DestroyInstance(instance, null);
+
         khrSurface.Dispose();
         debugUtils?.Dispose();
-
-        vk.DestroyInstance(instance, null);
 
         vk.Dispose();
 
