@@ -17,10 +17,34 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Update="Shaders\frag.spv">
+		<None Update="Shaders\HelloTriangleApplication\compile.bat">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
-		<None Update="Shaders\vert.spv">
+		<None Update="Shaders\HelloTriangleApplication\shader.frag">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\HelloTriangleApplication\shader.vert">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\VertexBuffersApplication\compile.bat">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\VertexBuffersApplication\frag.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\VertexBuffersApplication\shader.frag">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\VertexBuffersApplication\shader.vert">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\VertexBuffersApplication\vert.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\HelloTriangleApplication\frag.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\HelloTriangleApplication\vert.spv">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 	</ItemGroup>

@@ -11,7 +11,7 @@ using Semaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace VulkanTutorial.Tutorials;
 
-public unsafe class HelloTriangleApplication : IDisposable
+public unsafe class VertexBuffersApplication : IDisposable
 {
     private const uint Width = 800;
     private const uint Height = 600;
@@ -993,3 +993,4 @@ public unsafe class HelloTriangleApplication : IDisposable
         GC.SuppressFinalize(this);
     }
 }
+
