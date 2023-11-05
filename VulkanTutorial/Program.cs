@@ -8,7 +8,7 @@ internal class Program
     {
         _ = args;
 
-        using HelloTriangleApplication app = new();
+        using VertexBuffersApplication app = new();
 
         app.Run();
     }

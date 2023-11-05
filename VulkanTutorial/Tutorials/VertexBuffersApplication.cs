@@ -5,9 +5,12 @@ using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using VulkanTutorial.Helpers;
 using VulkanTutorial.Models;
-using Semaphore = Silk.NET.Vulkan.Semaphore;
+using Buffer = System.Buffer;
+using VkBuffer = Silk.NET.Vulkan.Buffer;
+using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace VulkanTutorial.Tutorials;
 
@@ -16,6 +19,13 @@ public unsafe class VertexBuffersApplication : IDisposable
     private const uint Width = 800;
     private const uint Height = 600;
     private const int MaxFramesInFlight = 2;
+
+    private readonly Vertex[] vertices = new Vertex[]
+    {
+        new Vertex() { Pos = new Vector2D<float>( 0.0f, -0.5f), Color = new Vector3D<float>(1.0f, 1.0f, 1.0f) },
+        new Vertex() { Pos = new Vector2D<float>( 0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 1.0f, 0.0f) },
+        new Vertex() { Pos = new Vector2D<float>(-0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 0.0f, 1.0f) }
+    };
 
     private static readonly string[] ValidationLayers = new string[]
     {
@@ -46,11 +56,13 @@ public unsafe class VertexBuffersApplication : IDisposable
     private RenderPass renderPass;
     private PipelineLayout pipelineLayout;
     private Pipeline graphicsPipeline;
+    private VkBuffer vertexBuffer;
+    private DeviceMemory vertexBufferMemory;
     private Framebuffer[] swapchainFramebuffers = null!;
     private CommandPool commandPool;
     private CommandBuffer[] commandBuffers = null!;
-    private Semaphore[] imageAvailableSemaphores = null!;
-    private Semaphore[] renderFinishedSemaphores = null!;
+    private VkSemaphore[] imageAvailableSemaphores = null!;
+    private VkSemaphore[] renderFinishedSemaphores = null!;
     private Fence[] inFlightFences = null!;
 
     private uint currentFrame = 0;
@@ -92,6 +104,7 @@ public unsafe class VertexBuffersApplication : IDisposable
         CreateImageViews();
         CreateRenderPass();
         CreateGraphicsPipeline();
+        CreateVertexBuffer();
         CreateFramebuffers();
         CreateCommandPool();
         CreateCommandBuffer();
@@ -130,21 +143,21 @@ public unsafe class VertexBuffersApplication : IDisposable
 
         RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-        Semaphore[] waitSemaphores = new[] { imageAvailableSemaphores[currentFrame] };
+        VkSemaphore[] waitSemaphores = new[] { imageAvailableSemaphores[currentFrame] };
         PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
         CommandBuffer[] commands = new[] { commandBuffers[currentFrame] };
-        Semaphore[] signalSemaphores = new[] { renderFinishedSemaphores[currentFrame] };
+        VkSemaphore[] signalSemaphores = new[] { renderFinishedSemaphores[currentFrame] };
 
         SubmitInfo submitInfo = new()
         {
             SType = StructureType.SubmitInfo,
             WaitSemaphoreCount = (uint)waitSemaphores.Length,
-            PWaitSemaphores = (Semaphore*)Unsafe.AsPointer(ref waitSemaphores[0]),
+            PWaitSemaphores = (VkSemaphore*)Unsafe.AsPointer(ref waitSemaphores[0]),
             PWaitDstStageMask = (PipelineStageFlags*)Unsafe.AsPointer(ref waitStages[0]),
             CommandBufferCount = (uint)commands.Length,
             PCommandBuffers = (CommandBuffer*)Unsafe.AsPointer(ref commands[0]),
             SignalSemaphoreCount = (uint)signalSemaphores.Length,
-            PSignalSemaphores = (Semaphore*)Unsafe.AsPointer(ref signalSemaphores[0])
+            PSignalSemaphores = (VkSemaphore*)Unsafe.AsPointer(ref signalSemaphores[0])
         };
 
         if (vk.QueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != Result.Success)
@@ -158,7 +171,7 @@ public unsafe class VertexBuffersApplication : IDisposable
         {
             SType = StructureType.PresentInfoKhr,
             WaitSemaphoreCount = (uint)signalSemaphores.Length,
-            PWaitSemaphores = (Semaphore*)Unsafe.AsPointer(ref signalSemaphores[0]),
+            PWaitSemaphores = (VkSemaphore*)Unsafe.AsPointer(ref signalSemaphores[0]),
             SwapchainCount = (uint)swapChains.Length,
             PSwapchains = (SwapchainKHR*)Unsafe.AsPointer(ref swapChains[0]),
             PImageIndices = &imageIndex
@@ -566,9 +579,16 @@ public unsafe class VertexBuffersApplication : IDisposable
         };
 
         // 顶点输入
+        VertexInputBindingDescription bindingDescription = Vertex.GetBindingDescription();
+        VertexInputAttributeDescription[] attributeDescriptions = Vertex.GetAttributeDescriptions();
+
         PipelineVertexInputStateCreateInfo vertexInputInfo = new()
         {
-            SType = StructureType.PipelineVertexInputStateCreateInfo
+            SType = StructureType.PipelineVertexInputStateCreateInfo,
+            VertexBindingDescriptionCount = 1,
+            PVertexBindingDescriptions = &bindingDescription,
+            VertexAttributeDescriptionCount = (uint)attributeDescriptions.Length,
+            PVertexAttributeDescriptions = (VertexInputAttributeDescription*)Unsafe.AsPointer(ref attributeDescriptions[0])
         };
 
         // 输入组装
@@ -690,6 +710,47 @@ public unsafe class VertexBuffersApplication : IDisposable
 
         vk.DestroyShaderModule(device, fragShaderModule, null);
         vk.DestroyShaderModule(device, vertShaderModule, null);
+    }
+
+    /// <summary>
+    /// 创建顶点缓冲。
+    /// </summary>
+    private void CreateVertexBuffer()
+    {
+        BufferCreateInfo bufferInfo = new()
+        {
+            SType = StructureType.BufferCreateInfo,
+            Size = (ulong)(vertices.Length * Marshal.SizeOf<Vertex>()),
+            Usage = BufferUsageFlags.VertexBufferBit,
+            SharingMode = SharingMode.Exclusive
+        };
+
+        if (vk.CreateBuffer(device, &bufferInfo, null, out vertexBuffer) != Result.Success)
+        {
+            throw new Exception("创建顶点缓冲失败。");
+        }
+
+        MemoryRequirements memRequirements;
+        vk.GetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+
+        MemoryAllocateInfo allocInfo = new()
+        {
+            SType = StructureType.MemoryAllocateInfo,
+            AllocationSize = memRequirements.Size,
+            MemoryTypeIndex = vk.FindMemoryType(physicalDevice, memRequirements.MemoryTypeBits, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)
+        };
+
+        if (vk.AllocateMemory(device, &allocInfo, null, out vertexBufferMemory) != Result.Success)
+        {
+            throw new Exception("分配顶点缓冲内存失败。");
+        }
+
+        vk.BindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+
+        void* data;
+        vk.MapMemory(device, vertexBufferMemory, 0, bufferInfo.Size, 0, &data);
+        Buffer.MemoryCopy(Unsafe.AsPointer(ref vertices[0]), data, bufferInfo.Size, bufferInfo.Size);
+        vk.UnmapMemory(device, vertexBufferMemory);
     }
 
     /// <summary>
@@ -839,7 +900,11 @@ public unsafe class VertexBuffersApplication : IDisposable
         };
         vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
 
-        vk.CmdDraw(commandBuffer, 3, 1, 0, 0);
+        VkBuffer[] vertexBuffers = new[] { vertexBuffer };
+        ulong[] offsets = new[] { 0UL };
+        vk.CmdBindVertexBuffers(commandBuffer, 0, 1, (VkBuffer*)Unsafe.AsPointer(ref vertexBuffers[0]), offsets);
+
+        vk.CmdDraw(commandBuffer, (uint)vertices.Length, 1, 0, 0);
 
         vk.CmdEndRenderPass(commandBuffer);
 
@@ -854,8 +919,8 @@ public unsafe class VertexBuffersApplication : IDisposable
     /// </summary>
     private void CreateSyncObjects()
     {
-        imageAvailableSemaphores = new Semaphore[MaxFramesInFlight];
-        renderFinishedSemaphores = new Semaphore[MaxFramesInFlight];
+        imageAvailableSemaphores = new VkSemaphore[MaxFramesInFlight];
+        renderFinishedSemaphores = new VkSemaphore[MaxFramesInFlight];
         inFlightFences = new Fence[MaxFramesInFlight];
 
         SemaphoreCreateInfo semaphoreInfo = new()
@@ -957,6 +1022,9 @@ public unsafe class VertexBuffersApplication : IDisposable
     public void Dispose()
     {
         CleanupSwapChain();
+
+        vk.DestroyBuffer(device, vertexBuffer, null);
+        vk.FreeMemory(device, vertexBufferMemory, null);
 
         vk.DestroyPipeline(device, graphicsPipeline, null);
 

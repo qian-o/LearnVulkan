@@ -110,4 +110,28 @@ public static unsafe class VulkanExtensions
             return shaderModule;
         }
     }
+
+    /// <summary>
+    /// 查找合适的内存类型。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="device">device</param>
+    /// <param name="typeFilter">typeFilter</param>
+    /// <param name="properties">properties</param>
+    /// <returns></returns>
+    public static uint FindMemoryType(this Vk vk, PhysicalDevice device, uint typeFilter, MemoryPropertyFlags properties)
+    {
+        PhysicalDeviceMemoryProperties memProperties;
+        vk.GetPhysicalDeviceMemoryProperties(device, &memProperties);
+
+        for (uint i = 0; i < memProperties.MemoryTypeCount; i++)
+        {
+            if ((typeFilter & (1 << (int)i)) != 0 && memProperties.MemoryTypes[(int)i].PropertyFlags.HasFlag(properties))
+            {
+                return i;
+            }
+        }
+
+        throw new Exception("无法找到合适的内存类型！");
+    }
 }
