@@ -76,6 +76,8 @@ public unsafe class UniformBuffersApplication : IDisposable
     private VkBuffer[] uniformBuffers = null!;
     private DeviceMemory[] uniformBuffersMemory = null!;
     private void*[] uniformBuffersMapped = null!;
+    private DescriptorPool descriptorPool;
+    private DescriptorSet[] descriptorSets = null!;
     private VkSemaphore[] imageAvailableSemaphores = null!;
     private VkSemaphore[] renderFinishedSemaphores = null!;
     private Fence[] inFlightFences = null!;
@@ -126,6 +128,8 @@ public unsafe class UniformBuffersApplication : IDisposable
         CreateVertexBuffer();
         CreateIndexBuffer();
         CreateUniformBuffers();
+        CreateDescriptorPool();
+        CreateDescriptorSets();
         CreateSyncObjects();
     }
 
@@ -927,17 +931,92 @@ public unsafe class UniformBuffersApplication : IDisposable
         }
     }
 
+    /// <summary>
+    /// 创建描述符池。
+    /// </summary>
+    private void CreateDescriptorPool()
+    {
+        DescriptorPoolSize poolSize = new()
+        {
+            Type = DescriptorType.UniformBuffer,
+            DescriptorCount = MaxFramesInFlight
+        };
+
+        DescriptorPoolCreateInfo poolInfo = new()
+        {
+            SType = StructureType.DescriptorPoolCreateInfo,
+            PoolSizeCount = 1,
+            PPoolSizes = &poolSize,
+            MaxSets = MaxFramesInFlight
+        };
+
+        if (vk.CreateDescriptorPool(device, &poolInfo, null, out descriptorPool) != Result.Success)
+        {
+            throw new Exception("创建描述符池失败。");
+        }
+    }
+
+    /// <summary>
+    /// 创建描述符集。
+    /// </summary>
+    private void CreateDescriptorSets()
+    {
+        DescriptorSetLayout[] layouts = new DescriptorSetLayout[MaxFramesInFlight];
+        Array.Fill(layouts, descriptorSetLayout);
+
+        DescriptorSetAllocateInfo allocateInfo = new()
+        {
+            SType = StructureType.DescriptorSetAllocateInfo,
+            DescriptorPool = descriptorPool,
+            DescriptorSetCount = MaxFramesInFlight,
+            PSetLayouts = (DescriptorSetLayout*)Unsafe.AsPointer(ref layouts[0])
+        };
+
+        descriptorSets = new DescriptorSet[MaxFramesInFlight];
+
+        if (vk.AllocateDescriptorSets(device, &allocateInfo, (DescriptorSet*)Unsafe.AsPointer(ref descriptorSets[0])) != Result.Success)
+        {
+            throw new Exception("创建描述符集失败。");
+        }
+
+        for (uint i = 0; i < MaxFramesInFlight; i++)
+        {
+            DescriptorBufferInfo bufferInfo = new()
+            {
+                Buffer = uniformBuffers[i],
+                Offset = 0,
+                Range = (ulong)Marshal.SizeOf<UniformBufferObject>()
+            };
+
+            WriteDescriptorSet descriptorSet = new()
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = descriptorSets[i],
+                DstBinding = 0,
+                DstArrayElement = 0,
+                DescriptorType = DescriptorType.UniformBuffer,
+                DescriptorCount = 1,
+                PBufferInfo = &bufferInfo
+            };
+
+            vk.UpdateDescriptorSets(device, 1, &descriptorSet, 0, null);
+        }
+    }
+
+    /// <summary>
+    /// 更新统一缓冲。
+    /// </summary>
+    /// <param name="currentFrame"></param>
     private void UpdateUniformBuffer(uint currentFrame)
     {
         Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
-
 
         double time = window.Time;
 
         UniformBufferObject ubo = new()
         {
             Model = Matrix4X4.CreateRotationZ((float)time * Utils.DegreesToRadians(90.0f)),
-            View = Matrix4X4.CreateLookAt(new Vector3D<float>(2.0f, 2.0f, 2.0f), Vector3D<float>.Zero, Vector3D<float>.UnitZ),
+            View = Matrix4X4.CreateLookAt(new Vector3D<float>(0.0f, 2.0f, 2.0f), Vector3D<float>.Zero, Vector3D<float>.UnitY),
             Projection = Matrix4X4.CreatePerspectiveFieldOfView(Utils.DegreesToRadians(45.0f),
                                                                 extent.Width / extent.Height,
                                                                 0.1f,
@@ -1024,6 +1103,8 @@ public unsafe class UniformBuffersApplication : IDisposable
         vk.CmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffer, 0);
         vk.CmdBindIndexBuffer(commandBuffer, indexBuffer, 0, IndexType.Uint32);
 
+        DescriptorSet descriptorSet = descriptorSets[currentFrame];
+        vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1, &descriptorSet, 0, null);
         vk.CmdDrawIndexed(commandBuffer, (uint)indices.Length, 1, 0, 0, 0);
 
         vk.CmdEndRenderPass(commandBuffer);
@@ -1154,6 +1235,8 @@ public unsafe class UniformBuffersApplication : IDisposable
             vk.DestroyBuffer(device, uniformBuffers[i], null);
             vk.FreeMemory(device, uniformBuffersMemory[i], null);
         }
+
+        vk.DestroyDescriptorPool(device, descriptorPool, null);
 
         vk.DestroyDescriptorSetLayout(device, descriptorSetLayout, null);
 
