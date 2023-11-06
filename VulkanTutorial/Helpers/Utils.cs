@@ -4,6 +4,8 @@ namespace VulkanTutorial.Helpers;
 
 public unsafe class Utils
 {
+    public const float Pi = 3.1415927f;
+
     /// <summary>
     /// 字符串转指针。
     /// </summary>
@@ -57,5 +59,29 @@ public unsafe class Utils
         }
 
         return strs;
+    }
+
+    public static double DegreesToRadians(double degrees)
+    {
+        const double degToRad = Math.PI / 180.0;
+        return degrees * degToRad;
+    }
+
+    public static double RadiansToDegrees(double radians)
+    {
+        const double radToDeg = 180.0 / Math.PI;
+        return radians * radToDeg;
+    }
+
+    public static float DegreesToRadians(float degrees)
+    {
+        const float degToRad = Pi / 180.0f;
+        return degrees * degToRad;
+    }
+
+    public static float RadiansToDegrees(float radians)
+    {
+        const float radToDeg = 180.0f / Pi;
+        return radians * radToDeg;
     }
 }

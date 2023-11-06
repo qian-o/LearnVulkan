@@ -63,6 +63,7 @@ public unsafe class UniformBuffersApplication : IDisposable
     private Image[] swapchainImages = null!;
     private ImageView[] swapchainImageViews = null!;
     private RenderPass renderPass;
+    private DescriptorSetLayout descriptorSetLayout;
     private PipelineLayout pipelineLayout;
     private Pipeline graphicsPipeline;
     private Framebuffer[] swapchainFramebuffers = null!;
@@ -72,6 +73,9 @@ public unsafe class UniformBuffersApplication : IDisposable
     private DeviceMemory vertexBufferMemory;
     private VkBuffer indexBuffer;
     private DeviceMemory indexBufferMemory;
+    private VkBuffer[] uniformBuffers = null!;
+    private DeviceMemory[] uniformBuffersMemory = null!;
+    private void*[] uniformBuffersMapped = null!;
     private VkSemaphore[] imageAvailableSemaphores = null!;
     private VkSemaphore[] renderFinishedSemaphores = null!;
     private Fence[] inFlightFences = null!;
@@ -114,12 +118,14 @@ public unsafe class UniformBuffersApplication : IDisposable
         CreateSwapChain();
         CreateImageViews();
         CreateRenderPass();
+        CreateDescriptorSetLayout();
         CreateGraphicsPipeline();
         CreateFramebuffers();
         CreateCommandPool();
         CreateCommandBuffer();
         CreateVertexBuffer();
         CreateIndexBuffer();
+        CreateUniformBuffers();
         CreateSyncObjects();
     }
 
@@ -152,6 +158,8 @@ public unsafe class UniformBuffersApplication : IDisposable
         vk.ResetFences(device, 1, inFlightFences[currentFrame]);
 
         vk.ResetCommandBuffer(commandBuffers[currentFrame], 0);
+
+        UpdateUniformBuffer(currentFrame);
 
         RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
@@ -544,6 +552,33 @@ public unsafe class UniformBuffersApplication : IDisposable
     }
 
     /// <summary>
+    /// 创建描述符布局。
+    /// </summary>
+    private void CreateDescriptorSetLayout()
+    {
+        DescriptorSetLayoutBinding uboLayoutBinding = new()
+        {
+            Binding = 0,
+            DescriptorType = DescriptorType.UniformBuffer,
+            DescriptorCount = 1,
+            StageFlags = ShaderStageFlags.VertexBit,
+            PImmutableSamplers = null
+        };
+
+        DescriptorSetLayoutCreateInfo layoutInfo = new()
+        {
+            SType = StructureType.DescriptorSetLayoutCreateInfo,
+            BindingCount = 1,
+            PBindings = &uboLayoutBinding
+        };
+
+        if (vk.CreateDescriptorSetLayout(device, &layoutInfo, null, out descriptorSetLayout) != Result.Success)
+        {
+            throw new Exception("创建描述符布局失败。");
+        }
+    }
+
+    /// <summary>
     /// 创建图形管线。
     /// </summary>
     private void CreateGraphicsPipeline()
@@ -686,7 +721,9 @@ public unsafe class UniformBuffersApplication : IDisposable
         // 管线布局
         PipelineLayoutCreateInfo pipelineLayoutInfo = new()
         {
-            SType = StructureType.PipelineLayoutCreateInfo
+            SType = StructureType.PipelineLayoutCreateInfo,
+            SetLayoutCount = 1,
+            PSetLayouts = (DescriptorSetLayout*)Unsafe.AsPointer(ref descriptorSetLayout)
         };
 
         if (vk.CreatePipelineLayout(device, &pipelineLayoutInfo, null, out pipelineLayout) != Result.Success)
@@ -863,6 +900,51 @@ public unsafe class UniformBuffersApplication : IDisposable
 
         vk.DestroyBuffer(device, stagingBuffer, null);
         vk.FreeMemory(device, stagingBufferMemory, null);
+    }
+
+    /// <summary>
+    /// 创建统一缓冲。
+    /// </summary>
+    private void CreateUniformBuffers()
+    {
+        ulong size = (ulong)Marshal.SizeOf<UniformBufferObject>();
+
+        uniformBuffers = new VkBuffer[MaxFramesInFlight];
+        uniformBuffersMemory = new DeviceMemory[MaxFramesInFlight];
+        uniformBuffersMapped = new void*[MaxFramesInFlight];
+
+        for (int i = 0; i < MaxFramesInFlight; i++)
+        {
+            vk.CreateBuffer(physicalDevice,
+                            device,
+                            size,
+                            BufferUsageFlags.UniformBufferBit,
+                            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
+                            out uniformBuffers[i],
+                            out uniformBuffersMemory[i]);
+
+            vk.MapMemory(device, uniformBuffersMemory[i], 0, size, 0, ref uniformBuffersMapped[i]);
+        }
+    }
+
+    private void UpdateUniformBuffer(uint currentFrame)
+    {
+        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+
+
+        double time = window.Time;
+
+        UniformBufferObject ubo = new()
+        {
+            Model = Matrix4X4.CreateRotationZ((float)time * Utils.DegreesToRadians(90.0f)),
+            View = Matrix4X4.CreateLookAt(new Vector3D<float>(2.0f, 2.0f, 2.0f), Vector3D<float>.Zero, Vector3D<float>.UnitZ),
+            Projection = Matrix4X4.CreatePerspectiveFieldOfView(Utils.DegreesToRadians(45.0f),
+                                                                extent.Width / extent.Height,
+                                                                0.1f,
+                                                                10.0f)
+        };
+
+        Buffer.MemoryCopy(&ubo, uniformBuffersMapped[currentFrame], Marshal.SizeOf<UniformBufferObject>(), Marshal.SizeOf<UniformBufferObject>());
     }
 
     /// <summary>
@@ -1059,19 +1141,27 @@ public unsafe class UniformBuffersApplication : IDisposable
 
     public void Dispose()
     {
+        vk.DeviceWaitIdle(device);
+
         CleanupSwapChain();
+
+        vk.DestroyPipeline(device, graphicsPipeline, null);
+        vk.DestroyPipelineLayout(device, pipelineLayout, null);
+        vk.DestroyRenderPass(device, renderPass, null);
+
+        for (int i = 0; i < MaxFramesInFlight; i++)
+        {
+            vk.DestroyBuffer(device, uniformBuffers[i], null);
+            vk.FreeMemory(device, uniformBuffersMemory[i], null);
+        }
+
+        vk.DestroyDescriptorSetLayout(device, descriptorSetLayout, null);
 
         vk.DestroyBuffer(device, vertexBuffer, null);
         vk.FreeMemory(device, vertexBufferMemory, null);
 
         vk.DestroyBuffer(device, indexBuffer, null);
         vk.FreeMemory(device, indexBufferMemory, null);
-
-        vk.DestroyPipeline(device, graphicsPipeline, null);
-
-        vk.DestroyPipelineLayout(device, pipelineLayout, null);
-
-        vk.DestroyRenderPass(device, renderPass, null);
 
         for (int i = 0; i < MaxFramesInFlight; i++)
         {
@@ -1082,18 +1172,14 @@ public unsafe class UniformBuffersApplication : IDisposable
 
         vk.DestroyCommandPool(device, commandPool, null);
 
-        vk.DeviceWaitIdle(device);
-
         khrSwapchain.Dispose();
-
         vk.DestroyDevice(device, null);
 
         debugUtils?.DestroyDebugUtilsMessenger(instance, debugMessenger, null);
 
-        vk.DestroyInstance(instance, null);
-
-        khrSurface.Dispose();
         debugUtils?.Dispose();
+        khrSurface.Dispose();
+        vk.DestroyInstance(instance, null);
 
         vk.Dispose();
 
