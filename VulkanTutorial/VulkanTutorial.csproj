@@ -26,6 +26,21 @@
 		<None Update="Shaders\HelloTriangleApplication\shader.vert">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
+		<None Update="Shaders\UniformBuffersApplication\compile.bat">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\UniformBuffersApplication\frag.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\UniformBuffersApplication\shader.frag">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\UniformBuffersApplication\shader.vert">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\UniformBuffersApplication\vert.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 		<None Update="Shaders\VertexBuffersApplication\compile.bat">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
@@ -47,6 +62,10 @@
 		<None Update="Shaders\HelloTriangleApplication\vert.spv">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Folder Include="Shaders\UniformBuffersApplication\" />
 	</ItemGroup>
 
 </Project>

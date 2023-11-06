@@ -8,7 +8,7 @@ internal class Program
     {
         _ = args;
 
-        using VertexBuffersApplication app = new();
+        using UniformBuffersApplication app = new();
 
         app.Run();
     }
