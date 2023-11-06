@@ -1015,12 +1015,12 @@ public unsafe class UniformBuffersApplication : IDisposable
 
         UniformBufferObject ubo = new()
         {
-            Model = Matrix4X4.CreateRotationZ((float)time * Utils.DegreesToRadians(90.0f)),
-            View = Matrix4X4.CreateLookAt(new Vector3D<float>(0.0f, 2.0f, 2.0f), Vector3D<float>.Zero, Vector3D<float>.UnitY),
+            Model = Matrix4X4.CreateRotationZ((float)time * Utils.DegreesToRadians(45.0f)),
+            View = Matrix4X4.CreateLookAt(new Vector3D<float>(0.0f, 0.0f, 4.0f), Vector3D<float>.Zero, Vector3D<float>.UnitY),
             Projection = Matrix4X4.CreatePerspectiveFieldOfView(Utils.DegreesToRadians(45.0f),
                                                                 extent.Width / extent.Height,
                                                                 0.1f,
-                                                                10.0f)
+                                                                100.0f)
         };
 
         Buffer.MemoryCopy(&ubo, uniformBuffersMapped[currentFrame], Marshal.SizeOf<UniformBufferObject>(), Marshal.SizeOf<UniformBufferObject>());
