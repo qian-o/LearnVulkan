@@ -180,6 +180,16 @@ public static unsafe class VulkanExtensions
         throw new Exception("无法找到合适的内存类型！");
     }
 
+    /// <summary>
+    /// 拷贝缓冲区。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="device">device</param>
+    /// <param name="commandPool">commandPool</param>
+    /// <param name="graphicsQueue">graphicsQueue</param>
+    /// <param name="src">src</param>
+    /// <param name="dst">dst</param>
+    /// <param name="size">size</param>
     public static void CopyBuffer(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, VkBuffer src, VkBuffer dst, ulong size)
     {
         CommandBufferAllocateInfo allocateInfo = new()

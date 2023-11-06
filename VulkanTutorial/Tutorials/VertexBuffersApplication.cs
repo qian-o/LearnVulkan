@@ -25,9 +25,15 @@ public unsafe class VertexBuffersApplication : IDisposable
 
     private readonly Vertex[] vertices = new Vertex[]
     {
-        new Vertex() { Pos = new Vector2D<float>( 0.0f, -0.5f), Color = new Vector3D<float>(1.0f, 1.0f, 1.0f) },
-        new Vertex() { Pos = new Vector2D<float>( 0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 1.0f, 0.0f) },
-        new Vertex() { Pos = new Vector2D<float>(-0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 0.0f, 1.0f) }
+        new Vertex() { Pos = new Vector2D<float>(-0.5f, -0.5f), Color = new Vector3D<float>(1.0f, 0.0f, 0.0f) },
+        new Vertex() { Pos = new Vector2D<float>( 0.5f, -0.5f), Color = new Vector3D<float>(0.0f, 1.0f, 0.0f) },
+        new Vertex() { Pos = new Vector2D<float>( 0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 0.0f, 1.0f) },
+        new Vertex() { Pos = new Vector2D<float>(-0.5f,  0.5f), Color = new Vector3D<float>(1.0f, 1.0f, 1.0f) }
+    };
+
+    private readonly uint[] indices = new uint[]
+    {
+        0, 1, 2, 2, 3, 0
     };
 
     private static readonly string[] ValidationLayers = new string[]
@@ -59,11 +65,13 @@ public unsafe class VertexBuffersApplication : IDisposable
     private RenderPass renderPass;
     private PipelineLayout pipelineLayout;
     private Pipeline graphicsPipeline;
-    private VkBuffer vertexBuffer;
-    private DeviceMemory vertexBufferMemory;
     private Framebuffer[] swapchainFramebuffers = null!;
     private CommandPool commandPool;
     private CommandBuffer[] commandBuffers = null!;
+    private VkBuffer vertexBuffer;
+    private DeviceMemory vertexBufferMemory;
+    private VkBuffer indexBuffer;
+    private DeviceMemory indexBufferMemory;
     private VkSemaphore[] imageAvailableSemaphores = null!;
     private VkSemaphore[] renderFinishedSemaphores = null!;
     private Fence[] inFlightFences = null!;
@@ -111,6 +119,7 @@ public unsafe class VertexBuffersApplication : IDisposable
         CreateCommandPool();
         CreateCommandBuffer();
         CreateVertexBuffer();
+        CreateIndexBuffer();
         CreateSyncObjects();
     }
 
@@ -716,40 +725,6 @@ public unsafe class VertexBuffersApplication : IDisposable
     }
 
     /// <summary>
-    /// 创建顶点缓冲。
-    /// </summary>
-    private void CreateVertexBuffer()
-    {
-        ulong bufferSize = (ulong)(vertices.Length * Marshal.SizeOf<Vertex>());
-
-        vk.CreateBuffer(physicalDevice,
-                        device,
-                        bufferSize,
-                        BufferUsageFlags.TransferSrcBit,
-                        MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
-                        out VkBuffer stagingBuffer,
-                        out DeviceMemory stagingBufferMemory);
-
-        void* data;
-        vk.MapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-        Buffer.MemoryCopy(Unsafe.AsPointer(ref vertices[0]), data, bufferSize, bufferSize);
-        vk.UnmapMemory(device, stagingBufferMemory);
-
-        vk.CreateBuffer(physicalDevice,
-                        device,
-                        bufferSize,
-                        BufferUsageFlags.TransferDstBit | BufferUsageFlags.VertexBufferBit,
-                        MemoryPropertyFlags.DeviceLocalBit,
-                        out vertexBuffer,
-                        out vertexBufferMemory);
-
-        vk.CopyBuffer(device, commandPool, graphicsQueue, stagingBuffer, vertexBuffer, bufferSize);
-
-        vk.DestroyBuffer(device, stagingBuffer, null);
-        vk.FreeMemory(device, stagingBufferMemory, null);
-    }
-
-    /// <summary>
     /// 创建帧缓冲。
     /// </summary>
     private void CreateFramebuffers()
@@ -820,6 +795,74 @@ public unsafe class VertexBuffersApplication : IDisposable
         {
             throw new Exception("创建命令缓冲失败。");
         }
+    }
+
+    /// <summary>
+    /// 创建顶点缓冲。
+    /// </summary>
+    private void CreateVertexBuffer()
+    {
+        ulong size = (ulong)(vertices.Length * Marshal.SizeOf(vertices[0]));
+
+        vk.CreateBuffer(physicalDevice,
+                        device,
+                        size,
+                        BufferUsageFlags.TransferSrcBit,
+                        MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
+                        out VkBuffer stagingBuffer,
+                        out DeviceMemory stagingBufferMemory);
+
+        void* data;
+        vk.MapMemory(device, stagingBufferMemory, 0, size, 0, &data);
+        Buffer.MemoryCopy(Unsafe.AsPointer(ref vertices[0]), data, size, size);
+        vk.UnmapMemory(device, stagingBufferMemory);
+
+        vk.CreateBuffer(physicalDevice,
+                        device,
+                        size,
+                        BufferUsageFlags.TransferDstBit | BufferUsageFlags.VertexBufferBit,
+                        MemoryPropertyFlags.DeviceLocalBit,
+                        out vertexBuffer,
+                        out vertexBufferMemory);
+
+        vk.CopyBuffer(device, commandPool, graphicsQueue, stagingBuffer, vertexBuffer, size);
+
+        vk.DestroyBuffer(device, stagingBuffer, null);
+        vk.FreeMemory(device, stagingBufferMemory, null);
+    }
+
+    /// <summary>
+    /// 创建索引缓冲。
+    /// </summary>
+    private void CreateIndexBuffer()
+    {
+        ulong size = (ulong)(indices.Length * Marshal.SizeOf(indices[0]));
+
+        vk.CreateBuffer(physicalDevice,
+                        device,
+                        size,
+                        BufferUsageFlags.TransferSrcBit,
+                        MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
+                        out VkBuffer stagingBuffer,
+                        out DeviceMemory stagingBufferMemory);
+
+        void* data;
+        vk.MapMemory(device, stagingBufferMemory, 0, size, 0, &data);
+        Buffer.MemoryCopy(Unsafe.AsPointer(ref indices[0]), data, size, size);
+        vk.UnmapMemory(device, stagingBufferMemory);
+
+        vk.CreateBuffer(physicalDevice,
+                        device,
+                        size,
+                        BufferUsageFlags.TransferDstBit | BufferUsageFlags.IndexBufferBit,
+                        MemoryPropertyFlags.DeviceLocalBit,
+                        out indexBuffer,
+                        out indexBufferMemory);
+
+        vk.CopyBuffer(device, commandPool, graphicsQueue, stagingBuffer, indexBuffer, size);
+
+        vk.DestroyBuffer(device, stagingBuffer, null);
+        vk.FreeMemory(device, stagingBufferMemory, null);
     }
 
     /// <summary>
@@ -896,11 +939,10 @@ public unsafe class VertexBuffersApplication : IDisposable
         };
         vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
 
-        VkBuffer[] vertexBuffers = new[] { vertexBuffer };
-        ulong[] offsets = new[] { 0UL };
-        vk.CmdBindVertexBuffers(commandBuffer, 0, 1, (VkBuffer*)Unsafe.AsPointer(ref vertexBuffers[0]), offsets);
+        vk.CmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffer, 0);
+        vk.CmdBindIndexBuffer(commandBuffer, indexBuffer, 0, IndexType.Uint32);
 
-        vk.CmdDraw(commandBuffer, (uint)vertices.Length, 1, 0, 0);
+        vk.CmdDrawIndexed(commandBuffer, (uint)indices.Length, 1, 0, 0, 0);
 
         vk.CmdEndRenderPass(commandBuffer);
 
@@ -1021,6 +1063,9 @@ public unsafe class VertexBuffersApplication : IDisposable
 
         vk.DestroyBuffer(device, vertexBuffer, null);
         vk.FreeMemory(device, vertexBufferMemory, null);
+
+        vk.DestroyBuffer(device, indexBuffer, null);
+        vk.FreeMemory(device, indexBufferMemory, null);
 
         vk.DestroyPipeline(device, graphicsPipeline, null);
 
