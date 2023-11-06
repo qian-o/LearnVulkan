@@ -11,6 +11,9 @@ using Semaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace VulkanTutorial.Tutorials;
 
+/// <summary>
+/// 绘制第一个三角形。
+/// </summary>
 public unsafe class HelloTriangleApplication : IDisposable
 {
     private const uint Width = 800;

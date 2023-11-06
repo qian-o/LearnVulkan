@@ -1,6 +1,7 @@
 ﻿using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using System.Runtime.CompilerServices;
+using VkBuffer = Silk.NET.Vulkan.Buffer;
 
 namespace VulkanTutorial.Helpers;
 
@@ -56,16 +57,16 @@ public static unsafe class VulkanExtensions
     /// 检查是否支持指定的设备扩展。
     /// </summary>
     /// <param name="vk">vk</param>
-    /// <param name="device">device</param>
+    /// <param name="physicalDevice">physicalDevice</param>
     /// <param name="deviceExtensions">deviceExtensions</param>
     /// <returns></returns>
-    public static bool CheckDeviceExtensionSupport(this Vk vk, PhysicalDevice device, string[] deviceExtensions)
+    public static bool CheckDeviceExtensionSupport(this Vk vk, PhysicalDevice physicalDevice, string[] deviceExtensions)
     {
         uint extensionCount = 0;
-        vk.EnumerateDeviceExtensionProperties(device, string.Empty, &extensionCount, null);
+        vk.EnumerateDeviceExtensionProperties(physicalDevice, string.Empty, &extensionCount, null);
 
         Span<ExtensionProperties> availableExtensions = stackalloc ExtensionProperties[(int)extensionCount];
-        vk.EnumerateDeviceExtensionProperties(device, string.Empty, &extensionCount, (ExtensionProperties*)Unsafe.AsPointer(ref availableExtensions[0]));
+        vk.EnumerateDeviceExtensionProperties(physicalDevice, string.Empty, &extensionCount, (ExtensionProperties*)Unsafe.AsPointer(ref availableExtensions[0]));
 
         HashSet<string> requiredExtensions = new(deviceExtensions);
         foreach (ExtensionProperties extension in availableExtensions)
@@ -112,17 +113,61 @@ public static unsafe class VulkanExtensions
     }
 
     /// <summary>
+    /// 创建缓冲区。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="physicalDevice">physicalDevice</param>
+    /// <param name="device">device</param>
+    /// <param name="size">size</param>
+    /// <param name="usage">usage</param>
+    /// <param name="properties">properties</param>
+    /// <param name="buffer">buffer</param>
+    /// <param name="bufferMemory">bufferMemory</param>
+    public static void CreateBuffer(this Vk vk, PhysicalDevice physicalDevice, Device device, ulong size, BufferUsageFlags usage, MemoryPropertyFlags properties, out VkBuffer buffer, out DeviceMemory bufferMemory)
+    {
+        BufferCreateInfo bufferInfo = new()
+        {
+            SType = StructureType.BufferCreateInfo,
+            Size = size,
+            Usage = usage,
+            SharingMode = SharingMode.Exclusive
+        };
+
+        if (vk.CreateBuffer(device, &bufferInfo, null, out buffer) != Result.Success)
+        {
+            throw new Exception("无法创建缓冲区！");
+        }
+
+        MemoryRequirements memRequirements;
+        vk.GetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+        MemoryAllocateInfo allocInfo = new()
+        {
+            SType = StructureType.MemoryAllocateInfo,
+            AllocationSize = memRequirements.Size,
+            MemoryTypeIndex = vk.FindMemoryType(physicalDevice, memRequirements.MemoryTypeBits, properties)
+        };
+
+        if (vk.AllocateMemory(device, &allocInfo, null, out bufferMemory) != Result.Success)
+        {
+            throw new Exception("无法分配缓冲区内存！");
+        }
+
+        vk.BindBufferMemory(device, buffer, bufferMemory, 0);
+    }
+
+    /// <summary>
     /// 查找合适的内存类型。
     /// </summary>
     /// <param name="vk">vk</param>
-    /// <param name="device">device</param>
+    /// <param name="physicalDevice">physicalDevice</param>
     /// <param name="typeFilter">typeFilter</param>
     /// <param name="properties">properties</param>
     /// <returns></returns>
-    public static uint FindMemoryType(this Vk vk, PhysicalDevice device, uint typeFilter, MemoryPropertyFlags properties)
+    public static uint FindMemoryType(this Vk vk, PhysicalDevice physicalDevice, uint typeFilter, MemoryPropertyFlags properties)
     {
         PhysicalDeviceMemoryProperties memProperties;
-        vk.GetPhysicalDeviceMemoryProperties(device, &memProperties);
+        vk.GetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 
         for (uint i = 0; i < memProperties.MemoryTypeCount; i++)
         {
@@ -133,5 +178,48 @@ public static unsafe class VulkanExtensions
         }
 
         throw new Exception("无法找到合适的内存类型！");
+    }
+
+    public static void CopyBuffer(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, VkBuffer src, VkBuffer dst, ulong size)
+    {
+        CommandBufferAllocateInfo allocateInfo = new()
+        {
+            SType = StructureType.CommandBufferAllocateInfo,
+            Level = CommandBufferLevel.Primary,
+            CommandPool = commandPool,
+            CommandBufferCount = 1
+        };
+
+        CommandBuffer commandBuffer;
+        vk.AllocateCommandBuffers(device, &allocateInfo, &commandBuffer);
+
+        CommandBufferBeginInfo beginInfo = new()
+        {
+            SType = StructureType.CommandBufferBeginInfo,
+            Flags = CommandBufferUsageFlags.OneTimeSubmitBit,
+        };
+
+        vk.BeginCommandBuffer(commandBuffer, &beginInfo);
+
+        BufferCopy copyRegion = new()
+        {
+            Size = size
+        };
+
+        vk.CmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
+
+        vk.EndCommandBuffer(commandBuffer);
+
+        SubmitInfo submitInfo = new()
+        {
+            SType = StructureType.SubmitInfo,
+            CommandBufferCount = 1,
+            PCommandBuffers = &commandBuffer
+        };
+
+        vk.QueueSubmit(graphicsQueue, 1, &submitInfo, default);
+        vk.QueueWaitIdle(graphicsQueue);
+
+        vk.FreeCommandBuffers(device, commandPool, 1, &commandBuffer);
     }
 }

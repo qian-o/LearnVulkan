@@ -14,6 +14,9 @@ using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace VulkanTutorial.Tutorials;
 
+/// <summary>
+/// 顶点缓冲区。
+/// </summary>
 public unsafe class VertexBuffersApplication : IDisposable
 {
     private const uint Width = 800;
@@ -104,10 +107,10 @@ public unsafe class VertexBuffersApplication : IDisposable
         CreateImageViews();
         CreateRenderPass();
         CreateGraphicsPipeline();
-        CreateVertexBuffer();
         CreateFramebuffers();
         CreateCommandPool();
         CreateCommandBuffer();
+        CreateVertexBuffer();
         CreateSyncObjects();
     }
 
@@ -717,40 +720,33 @@ public unsafe class VertexBuffersApplication : IDisposable
     /// </summary>
     private void CreateVertexBuffer()
     {
-        BufferCreateInfo bufferInfo = new()
-        {
-            SType = StructureType.BufferCreateInfo,
-            Size = (ulong)(vertices.Length * Marshal.SizeOf<Vertex>()),
-            Usage = BufferUsageFlags.VertexBufferBit,
-            SharingMode = SharingMode.Exclusive
-        };
+        ulong bufferSize = (ulong)(vertices.Length * Marshal.SizeOf<Vertex>());
 
-        if (vk.CreateBuffer(device, &bufferInfo, null, out vertexBuffer) != Result.Success)
-        {
-            throw new Exception("创建顶点缓冲失败。");
-        }
-
-        MemoryRequirements memRequirements;
-        vk.GetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
-
-        MemoryAllocateInfo allocInfo = new()
-        {
-            SType = StructureType.MemoryAllocateInfo,
-            AllocationSize = memRequirements.Size,
-            MemoryTypeIndex = vk.FindMemoryType(physicalDevice, memRequirements.MemoryTypeBits, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)
-        };
-
-        if (vk.AllocateMemory(device, &allocInfo, null, out vertexBufferMemory) != Result.Success)
-        {
-            throw new Exception("分配顶点缓冲内存失败。");
-        }
-
-        vk.BindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+        vk.CreateBuffer(physicalDevice,
+                        device,
+                        bufferSize,
+                        BufferUsageFlags.TransferSrcBit,
+                        MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
+                        out VkBuffer stagingBuffer,
+                        out DeviceMemory stagingBufferMemory);
 
         void* data;
-        vk.MapMemory(device, vertexBufferMemory, 0, bufferInfo.Size, 0, &data);
-        Buffer.MemoryCopy(Unsafe.AsPointer(ref vertices[0]), data, bufferInfo.Size, bufferInfo.Size);
-        vk.UnmapMemory(device, vertexBufferMemory);
+        vk.MapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+        Buffer.MemoryCopy(Unsafe.AsPointer(ref vertices[0]), data, bufferSize, bufferSize);
+        vk.UnmapMemory(device, stagingBufferMemory);
+
+        vk.CreateBuffer(physicalDevice,
+                        device,
+                        bufferSize,
+                        BufferUsageFlags.TransferDstBit | BufferUsageFlags.VertexBufferBit,
+                        MemoryPropertyFlags.DeviceLocalBit,
+                        out vertexBuffer,
+                        out vertexBufferMemory);
+
+        vk.CopyBuffer(device, commandPool, graphicsQueue, stagingBuffer, vertexBuffer, bufferSize);
+
+        vk.DestroyBuffer(device, stagingBuffer, null);
+        vk.FreeMemory(device, stagingBufferMemory, null);
     }
 
     /// <summary>
