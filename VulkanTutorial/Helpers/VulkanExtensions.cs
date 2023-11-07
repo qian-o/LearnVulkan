@@ -157,6 +157,60 @@ public static unsafe class VulkanExtensions
     }
 
     /// <summary>
+    /// 创建图片
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="physicalDevice">physicalDevice</param>
+    /// <param name="device">device</param>
+    /// <param name="width">width</param>
+    /// <param name="height">height</param>
+    /// <param name="format">format</param>
+    /// <param name="tiling">tiling</param>
+    /// <param name="usage">usage</param>
+    /// <param name="properties">properties</param>
+    /// <param name="image">image</param>
+    /// <param name="imageMemory">imageMemory</param>
+    public static void CreateImage(this Vk vk, PhysicalDevice physicalDevice, Device device, uint width, uint height, Format format, ImageTiling tiling, ImageUsageFlags usage, MemoryPropertyFlags properties, out Image image, out DeviceMemory imageMemory)
+    {
+        ImageCreateInfo imageInfo = new()
+        {
+            SType = StructureType.ImageCreateInfo,
+            ImageType = ImageType.Type2D,
+            Extent = new Extent3D(width, height, 1),
+            MipLevels = 1,
+            ArrayLayers = 1,
+            Format = format,
+            Tiling = tiling,
+            InitialLayout = ImageLayout.Undefined,
+            Usage = usage,
+            SharingMode = SharingMode.Exclusive,
+            Samples = SampleCountFlags.Count1Bit
+        };
+
+        if (vk.CreateImage(device, &imageInfo, null, out image) != Result.Success)
+        {
+            throw new Exception("无法创建图像！");
+        }
+
+        MemoryRequirements memRequirements;
+        vk.GetImageMemoryRequirements(device, image, &memRequirements);
+
+        MemoryAllocateInfo allocInfo = new()
+        {
+            SType = StructureType.MemoryAllocateInfo,
+            AllocationSize = memRequirements.Size,
+            MemoryTypeIndex = vk.FindMemoryType(physicalDevice, memRequirements.MemoryTypeBits, properties)
+        };
+
+        if (vk.AllocateMemory(device, &allocInfo, null, out imageMemory) != Result.Success)
+        {
+            throw new Exception("无法分配图像内存！");
+        }
+
+        vk.BindImageMemory(device, image, imageMemory, 0);
+    }
+
+    /// <summary>
     /// 查找合适的内存类型。
     /// </summary>
     /// <param name="vk">vk</param>
@@ -192,6 +246,126 @@ public static unsafe class VulkanExtensions
     /// <param name="size">size</param>
     public static void CopyBuffer(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, VkBuffer src, VkBuffer dst, ulong size)
     {
+        CommandBuffer commandBuffer = vk.BeginSingleTimeCommands(device, commandPool);
+
+        BufferCopy copyRegion = new()
+        {
+            Size = size
+        };
+
+        vk.CmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
+
+        vk.EndSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
+    }
+
+    /// <summary>
+    /// 移动图片布局。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="device">device</param>
+    /// <param name="commandPool">commandPool</param>
+    /// <param name="graphicsQueue">graphicsQueue</param>
+    /// <param name="image">image</param>
+    /// <param name="oldLayout">oldLayout</param>
+    /// <param name="newLayout">newLayout</param>
+    public static void TransitionImageLayout(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, Image image, ImageLayout oldLayout, ImageLayout newLayout)
+    {
+        CommandBuffer commandBuffer = vk.BeginSingleTimeCommands(device, commandPool);
+
+        ImageMemoryBarrier barrier = new()
+        {
+            SType = StructureType.ImageMemoryBarrier,
+            OldLayout = oldLayout,
+            NewLayout = newLayout,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            Image = image,
+            SubresourceRange = new ImageSubresourceRange
+            {
+                AspectMask = ImageAspectFlags.ColorBit,
+                BaseMipLevel = 0,
+                LevelCount = 1,
+                BaseArrayLayer = 0,
+                LayerCount = 1
+            },
+            SrcAccessMask = AccessFlags.None,
+            DstAccessMask = AccessFlags.None
+        };
+
+        PipelineStageFlags sourceStage;
+        PipelineStageFlags destinationStage;
+
+        if (oldLayout == ImageLayout.Undefined && newLayout == ImageLayout.TransferDstOptimal)
+        {
+            barrier.SrcAccessMask = AccessFlags.None;
+            barrier.DstAccessMask = AccessFlags.TransferWriteBit;
+
+            sourceStage = PipelineStageFlags.TopOfPipeBit;
+            destinationStage = PipelineStageFlags.TransferBit;
+        }
+        else if (oldLayout == ImageLayout.TransferDstOptimal && newLayout == ImageLayout.ShaderReadOnlyOptimal)
+        {
+            barrier.SrcAccessMask = AccessFlags.TransferWriteBit;
+            barrier.DstAccessMask = AccessFlags.ShaderReadBit;
+
+            sourceStage = PipelineStageFlags.TransferBit;
+            destinationStage = PipelineStageFlags.FragmentShaderBit;
+        }
+        else
+        {
+            throw new Exception("不支持的布局转换！");
+        }
+
+        vk.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
+
+        vk.EndSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
+    }
+
+    /// <summary>
+    /// 拷贝缓冲区到图片。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="device">device</param>
+    /// <param name="commandPool">commandPool</param>
+    /// <param name="graphicsQueue">graphicsQueue</param>
+    /// <param name="buffer">buffer</param>
+    /// <param name="image">image</param>
+    /// <param name="width">width</param>
+    /// <param name="height">height</param>
+    public static void CopyBufferToImage(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, VkBuffer buffer, Image image, uint width, uint height)
+    {
+        CommandBuffer commandBuffer = vk.BeginSingleTimeCommands(device, commandPool);
+
+        BufferImageCopy region = new()
+        {
+            BufferOffset = 0,
+            BufferRowLength = 0,
+            BufferImageHeight = 0,
+            ImageSubresource = new ImageSubresourceLayers
+            {
+                AspectMask = ImageAspectFlags.ColorBit,
+                MipLevel = 0,
+                BaseArrayLayer = 0,
+                LayerCount = 1
+            },
+            ImageOffset = new Offset3D(0, 0, 0),
+            ImageExtent = new Extent3D(width, height, 1)
+        };
+
+        vk.CmdCopyBufferToImage(commandBuffer, buffer, image, ImageLayout.TransferDstOptimal, 1, &region);
+
+        vk.EndSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
+    }
+
+    /// <summary>
+    /// 开启临时命令。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="device">device</param>
+    /// <param name="commandPool">commandPool</param>
+    /// <returns></returns>
+    public static CommandBuffer BeginSingleTimeCommands(this Vk vk, Device device, CommandPool commandPool)
+    {
         CommandBufferAllocateInfo allocateInfo = new()
         {
             SType = StructureType.CommandBufferAllocateInfo,
@@ -211,13 +385,19 @@ public static unsafe class VulkanExtensions
 
         vk.BeginCommandBuffer(commandBuffer, &beginInfo);
 
-        BufferCopy copyRegion = new()
-        {
-            Size = size
-        };
+        return commandBuffer;
+    }
 
-        vk.CmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
-
+    /// <summary>
+    /// 结束临时命令。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="device">device</param>
+    /// <param name="commandPool">commandPool</param>
+    /// <param name="graphicsQueue">graphicsQueue</param>
+    /// <param name="commandBuffer">commandBuffer</param>
+    public static void EndSingleTimeCommands(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, CommandBuffer commandBuffer)
+    {
         vk.EndCommandBuffer(commandBuffer);
 
         SubmitInfo submitInfo = new()
@@ -231,5 +411,39 @@ public static unsafe class VulkanExtensions
         vk.QueueWaitIdle(graphicsQueue);
 
         vk.FreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+    }
+
+    /// <summary>
+    /// 创建图像视图。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="device">device</param>
+    /// <param name="image">image</param>
+    /// <param name="format">format</param>
+    /// <returns></returns>
+    public static ImageView CreateImageView(this Vk vk, Device device, Image image, Format format)
+    {
+        ImageViewCreateInfo viewInfo = new()
+        {
+            SType = StructureType.ImageViewCreateInfo,
+            Image = image,
+            ViewType = ImageViewType.Type2D,
+            Format = format,
+            SubresourceRange = new ImageSubresourceRange
+            {
+                AspectMask = ImageAspectFlags.ColorBit,
+                BaseMipLevel = 0,
+                LevelCount = 1,
+                BaseArrayLayer = 0,
+                LayerCount = 1
+            }
+        };
+
+        if (vk.CreateImageView(device, &viewInfo, null, out ImageView imageView) != Result.Success)
+        {
+            throw new Exception("无法创建图像视图！");
+        }
+
+        return imageView;
     }
 }

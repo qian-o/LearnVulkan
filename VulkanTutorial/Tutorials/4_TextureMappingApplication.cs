@@ -4,8 +4,10 @@ using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
+using StbImageSharp;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using VulkanTutorial.Helpers;
 using VulkanTutorial.Models;
 using Buffer = System.Buffer;
@@ -22,10 +24,10 @@ public unsafe class TextureMappingApplication : IDisposable
 
     private readonly Vertex[] vertices = new Vertex[]
     {
-        new Vertex() { Pos = new Vector2D<float>(-0.5f, -0.5f), Color = new Vector3D<float>(1.0f, 0.0f, 0.0f) },
-        new Vertex() { Pos = new Vector2D<float>( 0.5f, -0.5f), Color = new Vector3D<float>(0.0f, 1.0f, 0.0f) },
-        new Vertex() { Pos = new Vector2D<float>( 0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 0.0f, 1.0f) },
-        new Vertex() { Pos = new Vector2D<float>(-0.5f,  0.5f), Color = new Vector3D<float>(1.0f, 1.0f, 1.0f) }
+        new Vertex() { Pos = new Vector2D<float>(-0.5f, -0.5f), Color = new Vector3D<float>(1.0f, 0.0f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
+        new Vertex() { Pos = new Vector2D<float>( 0.5f, -0.5f), Color = new Vector3D<float>(0.0f, 1.0f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 0.0f) },
+        new Vertex() { Pos = new Vector2D<float>( 0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 0.0f, 1.0f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
+        new Vertex() { Pos = new Vector2D<float>(-0.5f,  0.5f), Color = new Vector3D<float>(1.0f, 1.0f, 1.0f), TexCoord = new Vector2D<float>(1.0f, 1.0f) }
     };
 
     private readonly uint[] indices = new uint[]
@@ -63,6 +65,10 @@ public unsafe class TextureMappingApplication : IDisposable
     private DescriptorSetLayout descriptorSetLayout;
     private PipelineLayout pipelineLayout;
     private Pipeline graphicsPipeline;
+    private Image textureImage;
+    private DeviceMemory textureImageMemory;
+    private ImageView textureImageView;
+    private Sampler textureSampler;
     private Framebuffer[] swapchainFramebuffers = null!;
     private CommandPool commandPool;
     private CommandBuffer[] commandBuffers = null!;
@@ -121,6 +127,9 @@ public unsafe class TextureMappingApplication : IDisposable
         CreateGraphicsPipeline();
         CreateFramebuffers();
         CreateCommandPool();
+        CreateTextureImage();
+        CreateTextureImageView();
+        CreateTextureSampler();
         CreateCommandBuffer();
         CreateVertexBuffer();
         CreateIndexBuffer();
@@ -465,33 +474,7 @@ public unsafe class TextureMappingApplication : IDisposable
 
         for (int i = 0; i < swapchainImages.Length; i++)
         {
-            ImageViewCreateInfo createInfo = new()
-            {
-                SType = StructureType.ImageViewCreateInfo,
-                Image = swapchainImages[i],
-                ViewType = ImageViewType.Type2D,
-                Format = surfaceFormat.Format,
-                Components = new ComponentMapping
-                {
-                    R = ComponentSwizzle.Identity,
-                    G = ComponentSwizzle.Identity,
-                    B = ComponentSwizzle.Identity,
-                    A = ComponentSwizzle.Identity
-                },
-                SubresourceRange = new ImageSubresourceRange
-                {
-                    AspectMask = ImageAspectFlags.ColorBit,
-                    BaseMipLevel = 0,
-                    LevelCount = 1,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1
-                }
-            };
-
-            if (vk.CreateImageView(device, &createInfo, null, out swapchainImageViews[i]) != Result.Success)
-            {
-                throw new Exception("创建图像视图失败。");
-            }
+            swapchainImageViews[i] = vk.CreateImageView(device, swapchainImages[i], surfaceFormat.Format);
         }
     }
 
@@ -566,11 +549,26 @@ public unsafe class TextureMappingApplication : IDisposable
             PImmutableSamplers = null
         };
 
+        DescriptorSetLayoutBinding samplerLayoutBinding = new()
+        {
+            Binding = 1,
+            DescriptorType = DescriptorType.CombinedImageSampler,
+            DescriptorCount = 1,
+            StageFlags = ShaderStageFlags.FragmentBit,
+            PImmutableSamplers = null
+        };
+
+        DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
+        {
+            uboLayoutBinding,
+            samplerLayoutBinding
+        };
+
         DescriptorSetLayoutCreateInfo layoutInfo = new()
         {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
-            BindingCount = 1,
-            PBindings = &uboLayoutBinding
+            BindingCount = (uint)bindings.Length,
+            PBindings = (DescriptorSetLayoutBinding*)Unsafe.AsPointer(ref bindings[0])
         };
 
         if (vk.CreateDescriptorSetLayout(device, &layoutInfo, null, out descriptorSetLayout) != Result.Success)
@@ -763,6 +761,112 @@ public unsafe class TextureMappingApplication : IDisposable
     }
 
     /// <summary>
+    /// 创建纹理。
+    /// </summary>
+    private void CreateTextureImage()
+    {
+        ImageResult imageResult = ImageResult.FromMemory(File.ReadAllBytes($"Textures/{GetType().Name}/texture.jpg"), ColorComponents.RedGreenBlueAlpha);
+        int texWidth = imageResult.Width;
+        int texHeight = imageResult.Height;
+        int texChannels = (int)imageResult.Comp;
+
+        if (imageResult.Data == null)
+        {
+            throw new Exception("加载纹理失败。");
+        }
+
+        ulong size = (ulong)(texWidth * texHeight * texChannels);
+
+        vk.CreateBuffer(physicalDevice,
+                        device,
+                        size,
+                        BufferUsageFlags.TransferSrcBit,
+                        MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
+                        out VkBuffer stagingBuffer,
+                        out DeviceMemory stagingBufferMemory);
+
+        void* data;
+        vk.MapMemory(device, stagingBufferMemory, 0, size, 0, &data);
+        Buffer.MemoryCopy(Unsafe.AsPointer(ref imageResult.Data[0]), data, size, size);
+        vk.UnmapMemory(device, stagingBufferMemory);
+
+        vk.CreateImage(physicalDevice,
+                       device,
+                       (uint)texWidth,
+                       (uint)texHeight,
+                       Format.R8G8B8A8Srgb,
+                       ImageTiling.Optimal,
+                       ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
+                       MemoryPropertyFlags.DeviceLocalBit,
+                       out textureImage,
+                       out textureImageMemory);
+
+        vk.TransitionImageLayout(device,
+                                 commandPool,
+                                 graphicsQueue,
+                                 textureImage,
+                                 ImageLayout.Undefined,
+                                 ImageLayout.TransferDstOptimal);
+
+        vk.CopyBufferToImage(device,
+                             commandPool,
+                             graphicsQueue,
+                             stagingBuffer,
+                             textureImage,
+                             (uint)texWidth,
+                             (uint)texHeight);
+
+        vk.TransitionImageLayout(device,
+                                 commandPool,
+                                 graphicsQueue,
+                                 textureImage,
+                                 ImageLayout.TransferDstOptimal,
+                                 ImageLayout.ShaderReadOnlyOptimal);
+    }
+
+    /// <summary>
+    /// 创建纹理视图。
+    /// </summary>
+    private void CreateTextureImageView()
+    {
+        textureImageView = vk.CreateImageView(device, textureImage, Format.R8G8B8A8Srgb);
+    }
+
+    /// <summary>
+    /// 创建纹理采样器。
+    /// </summary>
+    private void CreateTextureSampler()
+    {
+        PhysicalDeviceProperties properties;
+        vk.GetPhysicalDeviceProperties(physicalDevice, &properties);
+
+        SamplerCreateInfo samplerInfo = new()
+        {
+            SType = StructureType.SamplerCreateInfo,
+            MagFilter = Filter.Linear,
+            MinFilter = Filter.Linear,
+            AddressModeU = SamplerAddressMode.Repeat,
+            AddressModeV = SamplerAddressMode.Repeat,
+            AddressModeW = SamplerAddressMode.Repeat,
+            AnisotropyEnable = Vk.False,
+            MaxAnisotropy = 1.0f,
+            BorderColor = BorderColor.IntOpaqueBlack,
+            UnnormalizedCoordinates = Vk.False,
+            CompareEnable = Vk.False,
+            CompareOp = CompareOp.Always,
+            MipmapMode = SamplerMipmapMode.Linear,
+            MipLodBias = 0.0f,
+            MinLod = 0.0f,
+            MaxLod = 0.0f
+        };
+
+        if (vk.CreateSampler(device, &samplerInfo, null, out textureSampler) != Result.Success)
+        {
+            throw new Exception("创建纹理采样器失败。");
+        }
+    }
+
+    /// <summary>
     /// 创建帧缓冲。
     /// </summary>
     private void CreateFramebuffers()
@@ -933,17 +1037,25 @@ public unsafe class TextureMappingApplication : IDisposable
     /// </summary>
     private void CreateDescriptorPool()
     {
-        DescriptorPoolSize poolSize = new()
+        DescriptorPoolSize[] poolSizes = new DescriptorPoolSize[]
         {
-            Type = DescriptorType.UniformBuffer,
-            DescriptorCount = MaxFramesInFlight
+            new DescriptorPoolSize
+            {
+                Type = DescriptorType.UniformBuffer,
+                DescriptorCount = MaxFramesInFlight
+            },
+            new DescriptorPoolSize
+            {
+                Type = DescriptorType.CombinedImageSampler,
+                DescriptorCount = MaxFramesInFlight
+            }
         };
 
         DescriptorPoolCreateInfo poolInfo = new()
         {
             SType = StructureType.DescriptorPoolCreateInfo,
-            PoolSizeCount = 1,
-            PPoolSizes = &poolSize,
+            PoolSizeCount = (uint)poolSizes.Length,
+            PPoolSizes = (DescriptorPoolSize*)Unsafe.AsPointer(ref poolSizes[0]),
             MaxSets = MaxFramesInFlight
         };
 
@@ -985,18 +1097,38 @@ public unsafe class TextureMappingApplication : IDisposable
                 Range = (ulong)Marshal.SizeOf<UniformBufferObject>()
             };
 
-            WriteDescriptorSet descriptorSet = new()
+            DescriptorImageInfo imageInfo = new()
             {
-                SType = StructureType.WriteDescriptorSet,
-                DstSet = descriptorSets[i],
-                DstBinding = 0,
-                DstArrayElement = 0,
-                DescriptorType = DescriptorType.UniformBuffer,
-                DescriptorCount = 1,
-                PBufferInfo = &bufferInfo
+                Sampler = textureSampler,
+                ImageView = textureImageView,
+                ImageLayout = ImageLayout.ShaderReadOnlyOptimal
             };
 
-            vk.UpdateDescriptorSets(device, 1, &descriptorSet, 0, null);
+            WriteDescriptorSet[] descriptorWrites = new[]
+            {
+                new WriteDescriptorSet
+                {
+                    SType = StructureType.WriteDescriptorSet,
+                    DstSet = descriptorSets[i],
+                    DstBinding = 0,
+                    DstArrayElement = 0,
+                    DescriptorType = DescriptorType.UniformBuffer,
+                    DescriptorCount = 1,
+                    PBufferInfo = &bufferInfo
+                },
+                new WriteDescriptorSet
+                {
+                    SType = StructureType.WriteDescriptorSet,
+                    DstSet = descriptorSets[i],
+                    DstBinding = 1,
+                    DstArrayElement = 0,
+                    DescriptorType = DescriptorType.CombinedImageSampler,
+                    DescriptorCount = 1,
+                    PImageInfo = &imageInfo
+                }
+            };
+
+            vk.UpdateDescriptorSets(device, (uint)descriptorWrites.Length, (WriteDescriptorSet*)Unsafe.AsPointer(ref descriptorWrites[0]), 0, null);
         }
     }
 
@@ -1199,6 +1331,7 @@ public unsafe class TextureMappingApplication : IDisposable
 
         return deviceProperties.DeviceType == PhysicalDeviceType.DiscreteGpu
                && deviceFeatures.GeometryShader
+               && deviceFeatures.SamplerAnisotropy
                && vk.CheckDeviceExtensionSupport(device, DeviceExtensions);
     }
 
@@ -1212,7 +1345,27 @@ public unsafe class TextureMappingApplication : IDisposable
     /// <returns></returns>
     private uint DebugCallback(DebugUtilsMessageSeverityFlagsEXT messageSeverity, DebugUtilsMessageTypeFlagsEXT messageType, DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
     {
-        Console.WriteLine($"[{messageSeverity}] {messageType}: {Utils.PointerToString(pCallbackData->PMessage)}");
+        string message = Utils.PointerToString(pCallbackData->PMessage);
+        string[] strings = message.Split('|', StringSplitOptions.TrimEntries);
+
+        StringBuilder stringBuilder = new();
+        stringBuilder.AppendLine($"[{messageSeverity}] [{messageType}]");
+        stringBuilder.AppendLine($"Name: {Utils.PointerToString(pCallbackData->PMessageIdName)}");
+        stringBuilder.AppendLine($"Number: {pCallbackData->MessageIdNumber}");
+        foreach (string str in strings)
+        {
+            stringBuilder.AppendLine($"{str}");
+        }
+
+        Console.ForegroundColor = messageSeverity switch
+        {
+            DebugUtilsMessageSeverityFlagsEXT.InfoBitExt => ConsoleColor.Blue,
+            DebugUtilsMessageSeverityFlagsEXT.WarningBitExt => ConsoleColor.Yellow,
+            DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt => ConsoleColor.Red,
+            _ => ConsoleColor.White,
+        };
+
+        Console.WriteLine(stringBuilder);
 
         return Vk.False;
     }
@@ -1222,6 +1375,12 @@ public unsafe class TextureMappingApplication : IDisposable
         vk.DeviceWaitIdle(device);
 
         CleanupSwapChain();
+
+        vk.DestroySampler(device, textureSampler, null);
+        vk.DestroyImageView(device, textureImageView, null);
+
+        vk.DestroyImage(device, textureImage, null);
+        vk.FreeMemory(device, textureImageMemory, null);
 
         vk.DestroyPipeline(device, graphicsPipeline, null);
         vk.DestroyPipelineLayout(device, pipelineLayout, null);
