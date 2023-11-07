@@ -8,7 +8,7 @@ internal class Program
     {
         _ = args;
 
-        using TextureMappingApplication app = new();
+        using DepthBufferingApplication app = new();
 
         app.Run();
     }
