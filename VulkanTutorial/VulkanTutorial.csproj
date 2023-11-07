@@ -14,6 +14,7 @@
 		<PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.18.0" />
 		<PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.18.0" />
 		<PackageReference Include="Silk.NET.Windowing" Version="2.18.0" />
+		<PackageReference Include="StbImageSharp" Version="2.27.13" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -24,6 +25,21 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 		<None Update="Shaders\HelloTriangleApplication\shader.vert">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\TextureMappingApplication\compile.bat">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\TextureMappingApplication\frag.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\TextureMappingApplication\shader.frag">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\TextureMappingApplication\shader.vert">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\TextureMappingApplication\vert.spv">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 		<None Update="Shaders\UniformBuffersApplication\compile.bat">
@@ -62,10 +78,6 @@
 		<None Update="Shaders\HelloTriangleApplication\vert.spv">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
-	</ItemGroup>
-
-	<ItemGroup>
-		<Folder Include="Shaders\UniformBuffersApplication\" />
 	</ItemGroup>
 
 </Project>
