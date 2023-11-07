@@ -6,6 +6,8 @@ public unsafe class Utils
 {
     public const float Pi = 3.1415927f;
 
+    public const float PiOver2 = Pi / 2;
+
     /// <summary>
     /// 字符串转指针。
     /// </summary>
@@ -59,6 +61,16 @@ public unsafe class Utils
         }
 
         return strs;
+    }
+
+    public static double Clamp(double n, double min, double max)
+    {
+        return Math.Max(Math.Min(n, max), min);
+    }
+
+    public static float Clamp(float n, float min, float max)
+    {
+        return Math.Max(Math.Min(n, max), min);
     }
 
     public static double DegreesToRadians(double degrees)

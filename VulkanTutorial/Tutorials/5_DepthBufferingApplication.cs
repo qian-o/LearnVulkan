@@ -1,4 +1,5 @@
 ﻿using Silk.NET.Core;
+using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
@@ -10,29 +11,77 @@ using System.Runtime.InteropServices;
 using System.Text;
 using VulkanTutorial.Helpers;
 using VulkanTutorial.Models;
+using VulkanTutorial.Tools;
 using Buffer = System.Buffer;
 using VkBuffer = Silk.NET.Vulkan.Buffer;
+using VkImage = Silk.NET.Vulkan.Image;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace VulkanTutorial.Tutorials;
 
 public unsafe class DepthBufferingApplication : IDisposable
 {
+    public struct Vertex
+    {
+        public Vector3D<float> Pos;
+
+        public Vector2D<float> TexCoord;
+
+        public static VertexInputBindingDescription GetBindingDescription()
+        {
+            return new()
+            {
+                Binding = 0,
+                Stride = (uint)Marshal.SizeOf<Vertex>(),
+                InputRate = VertexInputRate.Vertex
+            };
+        }
+
+        public static VertexInputAttributeDescription[] GetAttributeDescriptions()
+        {
+            return new[]
+            {
+                new VertexInputAttributeDescription
+                {
+                    Binding = 0,
+                    Location = 0,
+                    Format = Format.R32G32Sfloat,
+                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(Pos))
+                },
+                new VertexInputAttributeDescription
+                {
+                    Binding = 0,
+                    Location = 2,
+                    Format = Format.R32G32Sfloat,
+                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(TexCoord))
+                }
+            };
+        }
+    }
+
     private const uint Width = 800;
     private const uint Height = 600;
     private const int MaxFramesInFlight = 2;
+    private const float CameraSpeed = 4.0f;
+    private const float CameraSensitivity = 0.2f;
 
     private readonly Vertex[] vertices = new Vertex[]
     {
-        new Vertex() { Pos = new Vector2D<float>(-0.5f, -0.5f), Color = new Vector3D<float>(1.0f, 0.0f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
-        new Vertex() { Pos = new Vector2D<float>( 0.5f, -0.5f), Color = new Vector3D<float>(0.0f, 1.0f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 0.0f) },
-        new Vertex() { Pos = new Vector2D<float>( 0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 0.0f, 1.0f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
-        new Vertex() { Pos = new Vector2D<float>(-0.5f,  0.5f), Color = new Vector3D<float>(1.0f, 1.0f, 1.0f), TexCoord = new Vector2D<float>(1.0f, 1.0f) }
+        new Vertex() { Pos = new Vector3D<float>(-0.5f, -0.5f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
+        new Vertex() { Pos = new Vector3D<float>( 0.5f, -0.5f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 1.0f) },
+        new Vertex() { Pos = new Vector3D<float>( 0.5f,  0.5f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
+        new Vertex() { Pos = new Vector3D<float>(-0.5f,  0.5f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 0.0f) },
+
+        new Vertex() { Pos = new Vector3D<float>(0.0f, 0.0f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
+        new Vertex() { Pos = new Vector3D<float>(1.0f, 0.0f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 1.0f) },
+        new Vertex() { Pos = new Vector3D<float>(1.0f, 1.0f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
+        new Vertex() { Pos = new Vector3D<float>(0.0f, 1.0f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 0.0f) }
     };
 
     private readonly uint[] indices = new uint[]
     {
-        0, 1, 2, 2, 3, 0
+        0, 1, 2, 2, 3, 0,
+        4, 5, 6, 6, 7, 4
     };
 
     private static readonly string[] ValidationLayers = new string[]
@@ -47,6 +96,15 @@ public unsafe class DepthBufferingApplication : IDisposable
 
     private IWindow window = null!;
 
+    private IInputContext inputContext = null!;
+    private IMouse mouse = null!;
+    private IKeyboard keyboard = null!;
+
+    private Camera camera = null!;
+
+    private bool firstMove = true;
+    private Vector2D<float> lastPos;
+
     private Vk vk = null!;
     private ExtDebugUtils debugUtils = null!;
     private KhrSurface khrSurface = null!;
@@ -59,13 +117,13 @@ public unsafe class DepthBufferingApplication : IDisposable
     private Queue graphicsQueue;
     private Queue presentQueue;
     private SwapchainKHR swapchain;
-    private Image[] swapchainImages = null!;
+    private VkImage[] swapchainImages = null!;
     private ImageView[] swapchainImageViews = null!;
     private RenderPass renderPass;
     private DescriptorSetLayout descriptorSetLayout;
     private PipelineLayout pipelineLayout;
     private Pipeline graphicsPipeline;
-    private Image textureImage;
+    private VkImage textureImage;
     private DeviceMemory textureImageMemory;
     private ImageView textureImageView;
     private Sampler textureSampler;
@@ -95,14 +153,30 @@ public unsafe class DepthBufferingApplication : IDisposable
 
     public void Run()
     {
+
         WindowOptions options = WindowOptions.DefaultVulkan;
         options.Size = new Vector2D<int>((int)Width, (int)Height);
         options.Title = "Vulkan Tutorial";
 
         window = Window.Create(options);
 
-        window.Load += InitVulkan;
+        window.Load += () =>
+        {
+            inputContext = window.CreateInput();
+
+            mouse = inputContext.Mice[0];
+            keyboard = inputContext.Keyboards[0];
+
+            camera = new Camera
+            {
+                Position = new Vector3D<float>(0.0f, 0.0f, 3.0f),
+                Fov = 45.0f
+            };
+
+            InitVulkan();
+        };
         window.Render += DrawFrame;
+        window.Update += FrameUpdate;
         window.FramebufferResize += FramebufferResize;
 
         window.Run();
@@ -218,6 +292,68 @@ public unsafe class DepthBufferingApplication : IDisposable
         }
 
         currentFrame = (currentFrame + 1) % MaxFramesInFlight;
+    }
+
+    private void FrameUpdate(double obj)
+    {
+        if (mouse.IsButtonPressed(MouseButton.Middle))
+        {
+            Vector2D<float> vector = new(mouse.Position.X, mouse.Position.Y);
+
+            if (firstMove)
+            {
+                lastPos = vector;
+
+                firstMove = false;
+            }
+            else
+            {
+                float deltaX = vector.X - lastPos.X;
+                float deltaY = vector.Y - lastPos.Y;
+
+                camera.Yaw += deltaX * CameraSensitivity;
+                camera.Pitch += -deltaY * CameraSensitivity;
+
+                lastPos = vector;
+            }
+        }
+        else
+        {
+            firstMove = true;
+        }
+
+        if (keyboard.IsKeyPressed(Key.W))
+        {
+            camera.Position += camera.Front * CameraSpeed * (float)obj;
+        }
+
+        if (keyboard.IsKeyPressed(Key.A))
+        {
+            camera.Position -= camera.Right * CameraSpeed * (float)obj;
+        }
+
+        if (keyboard.IsKeyPressed(Key.S))
+        {
+            camera.Position -= camera.Front * CameraSpeed * (float)obj;
+        }
+
+        if (keyboard.IsKeyPressed(Key.D))
+        {
+            camera.Position += camera.Right * CameraSpeed * (float)obj;
+        }
+
+        if (keyboard.IsKeyPressed(Key.Q))
+        {
+            camera.Position -= camera.Up * CameraSpeed * (float)obj;
+        }
+
+        if (keyboard.IsKeyPressed(Key.E))
+        {
+            camera.Position += camera.Up * CameraSpeed * (float)obj;
+        }
+
+        camera.Width = window.Size.X;
+        camera.Height = window.Size.Y;
     }
 
     private void FramebufferResize(Vector2D<int> obj)
@@ -455,9 +591,9 @@ public unsafe class DepthBufferingApplication : IDisposable
 
         khrSwapchain.GetSwapchainImages(device, swapchain, &imageCount, null);
 
-        swapchainImages = new Image[imageCount];
+        swapchainImages = new VkImage[imageCount];
 
-        fixed (Image* pSwapchainImages = swapchainImages)
+        fixed (VkImage* pSwapchainImages = swapchainImages)
         {
             khrSwapchain.GetSwapchainImages(device, swapchain, &imageCount, pSwapchainImages);
         }
@@ -684,7 +820,7 @@ public unsafe class DepthBufferingApplication : IDisposable
             PolygonMode = PolygonMode.Fill,
             LineWidth = 1.0f,
             CullMode = CullModeFlags.BackBit,
-            FrontFace = FrontFace.Clockwise,
+            FrontFace = FrontFace.CounterClockwise,
             DepthBiasEnable = Vk.False
         };
 
@@ -1138,18 +1274,11 @@ public unsafe class DepthBufferingApplication : IDisposable
     /// <param name="currentFrame"></param>
     private void UpdateUniformBuffer(uint currentFrame)
     {
-        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
-
-        double time = window.Time;
-
         UniformBufferObject ubo = new()
         {
-            Model = Matrix4X4.CreateRotationZ((float)time * Utils.DegreesToRadians(45.0f)),
-            View = Matrix4X4.CreateLookAt(new Vector3D<float>(0.0f, 0.0f, 4.0f), Vector3D<float>.Zero, Vector3D<float>.UnitY),
-            Projection = Matrix4X4.CreatePerspectiveFieldOfView(Utils.DegreesToRadians(45.0f),
-                                                                extent.Width / extent.Height,
-                                                                0.1f,
-                                                                100.0f)
+            Model = Matrix4X4<float>.Identity,
+            View = camera.View,
+            Projection = camera.Projection
         };
 
         Buffer.MemoryCopy(&ubo, uniformBuffersMapped[currentFrame], Marshal.SizeOf<UniformBufferObject>(), Marshal.SizeOf<UniformBufferObject>());
@@ -1210,9 +1339,9 @@ public unsafe class DepthBufferingApplication : IDisposable
         Viewport viewport = new()
         {
             X = 0.0f,
-            Y = 0.0f,
+            Y = extent.Height,
             Width = extent.Width,
-            Height = extent.Height,
+            Height = -extent.Height,
             MinDepth = 0.0f,
             MaxDepth = 1.0f
         };

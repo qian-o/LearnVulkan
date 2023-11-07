@@ -1,0 +1,73 @@
+﻿using Silk.NET.Maths;
+using VulkanTutorial.Helpers;
+
+namespace VulkanTutorial.Tools;
+
+public class Camera
+{
+    private Vector3D<float> front = -Vector3D<float>.UnitZ;
+    private Vector3D<float> up = Vector3D<float>.UnitY;
+    private Vector3D<float> right = Vector3D<float>.UnitX;
+    private float pitch;
+    private float yaw = -Utils.PiOver2;
+    private float fov = Utils.PiOver2;
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public Vector3D<float> Position { get; set; } = new(0.0f, 0.0f, 0.0f);
+
+    public Vector3D<float> Front => front;
+
+    public Vector3D<float> Up => up;
+
+    public Vector3D<float> Right => right;
+
+    public float Pitch
+    {
+        get => Utils.RadiansToDegrees(pitch);
+        set
+        {
+            pitch = Utils.DegreesToRadians(Utils.Clamp(value, -89f, 89f));
+
+            UpdateVectors();
+        }
+    }
+
+    public float Yaw
+    {
+        get => Utils.RadiansToDegrees(yaw);
+        set
+        {
+            yaw = Utils.DegreesToRadians(value);
+
+            UpdateVectors();
+        }
+    }
+
+    public float Fov
+    {
+        get => Utils.RadiansToDegrees(fov);
+        set
+        {
+            fov = Utils.DegreesToRadians(Utils.Clamp(value, 1f, 90f));
+        }
+    }
+
+    public Matrix4X4<float> View => Matrix4X4.CreateLookAt(Position, Position + Front, Up);
+
+    public Matrix4X4<float> Projection => Matrix4X4.CreatePerspectiveFieldOfView(fov, (float)Width / Height, 0.1f, 1000.0f);
+
+    private void UpdateVectors()
+    {
+        front.X = MathF.Cos(pitch) * MathF.Cos(yaw);
+        front.Y = MathF.Sin(pitch);
+        front.Z = MathF.Cos(pitch) * MathF.Sin(yaw);
+
+        front = Vector3D.Normalize(front);
+
+        right = Vector3D.Normalize(Vector3D.Cross(front, Vector3D<float>.UnitY));
+        up = Vector3D.Normalize(Vector3D.Cross(right, front));
+    }
+}
