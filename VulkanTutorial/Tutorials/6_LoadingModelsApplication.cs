@@ -506,11 +506,11 @@ public unsafe class LoadingModelsApplication : IDisposable
         private readonly Device _device;
         private readonly CommandPool _commandPool;
         private readonly Queue _graphicsQueue;
+        private readonly DescriptorSetLayout _descriptorSetLayout;
 
         private VkBuffer uniformBuffer;
         private DeviceMemory uniformBufferMemory;
         private void* uniformBufferMapped;
-        private DescriptorSetLayout descriptorSetLayout;
         private DescriptorPool descriptorPool;
         private DescriptorSet[] descriptorSets = null!;
 
@@ -518,18 +518,18 @@ public unsafe class LoadingModelsApplication : IDisposable
 
         public Matrix4X4<float> Transform { get; set; } = Matrix4X4<float>.Identity;
 
-        public Model(Vk vk, PhysicalDevice physicalDevice, Device device, CommandPool commandPool, Queue graphicsQueue, string file)
+        public Model(Vk vk, PhysicalDevice physicalDevice, Device device, CommandPool commandPool, Queue graphicsQueue, DescriptorSetLayout descriptorSetLayout, string file)
         {
             _vk = vk;
             _physicalDevice = physicalDevice;
             _device = device;
             _commandPool = commandPool;
             _graphicsQueue = graphicsQueue;
+            _descriptorSetLayout = descriptorSetLayout;
 
             Meshes = LoadModel(file);
 
             CreateUniformBuffer();
-            CreateDescriptorSetLayout();
             CreateDescriptorPool();
             AllocateDescriptorSet();
         }
@@ -597,48 +597,6 @@ public unsafe class LoadingModelsApplication : IDisposable
         }
 
         /// <summary>
-        /// 创建描述符布局。
-        /// </summary>
-        private void CreateDescriptorSetLayout()
-        {
-            DescriptorSetLayoutBinding uboLayoutBinding = new()
-            {
-                Binding = 0,
-                DescriptorType = DescriptorType.UniformBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.VertexBit,
-                PImmutableSamplers = null
-            };
-
-            DescriptorSetLayoutBinding samplerLayoutBinding = new()
-            {
-                Binding = 1,
-                DescriptorType = DescriptorType.CombinedImageSampler,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.FragmentBit,
-                PImmutableSamplers = null
-            };
-
-            DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
-            {
-                uboLayoutBinding,
-                samplerLayoutBinding
-            };
-
-            DescriptorSetLayoutCreateInfo layoutInfo = new()
-            {
-                SType = StructureType.DescriptorSetLayoutCreateInfo,
-                BindingCount = (uint)bindings.Length,
-                PBindings = (DescriptorSetLayoutBinding*)Unsafe.AsPointer(ref bindings[0])
-            };
-
-            if (_vk.CreateDescriptorSetLayout(_device, &layoutInfo, null, out descriptorSetLayout) != Result.Success)
-            {
-                throw new Exception("创建描述符布局失败。");
-            }
-        }
-
-        /// <summary>
         /// 创建描述符池。
         /// </summary>
         private void CreateDescriptorPool()
@@ -677,7 +635,7 @@ public unsafe class LoadingModelsApplication : IDisposable
         private void AllocateDescriptorSet()
         {
             DescriptorSetLayout[] layouts = new DescriptorSetLayout[Meshes.Length];
-            Array.Fill(layouts, descriptorSetLayout);
+            Array.Fill(layouts, _descriptorSetLayout);
 
             DescriptorSetAllocateInfo allocateInfo = new()
             {
@@ -771,7 +729,6 @@ public unsafe class LoadingModelsApplication : IDisposable
             }
 
             _vk.DestroyDescriptorPool(_device, descriptorPool, null);
-            _vk.DestroyDescriptorSetLayout(_device, descriptorSetLayout, null);
 
             GC.SuppressFinalize(this);
         }
@@ -819,8 +776,8 @@ public unsafe class LoadingModelsApplication : IDisposable
     private VkImage[] swapchainImages = null!;
     private ImageView[] swapchainImageViews = null!;
     private RenderPass renderPass;
-    private DescriptorSetLayout descriptorSetLayout;
     private PipelineLayout pipelineLayout;
+    private DescriptorSetLayout descriptorSetLayout;
     private Pipeline graphicsPipeline;
     private VkImage depthImage;
     private DeviceMemory depthImageMemory;
@@ -828,11 +785,6 @@ public unsafe class LoadingModelsApplication : IDisposable
     private Framebuffer[] swapchainFramebuffers = null!;
     private CommandPool commandPool;
     private CommandBuffer[] commandBuffers = null!;
-    private VkBuffer[] uniformBuffers = null!;
-    private DeviceMemory[] uniformBuffersMemory = null!;
-    private void*[] uniformBuffersMapped = null!;
-    private DescriptorPool descriptorPool;
-    private DescriptorSet[] descriptorSets = null!;
     private VkSemaphore[] imageAvailableSemaphores = null!;
     private VkSemaphore[] renderFinishedSemaphores = null!;
     private Fence[] inFlightFences = null!;
@@ -900,9 +852,6 @@ public unsafe class LoadingModelsApplication : IDisposable
         CreateDepthResources();
         CreateFramebuffers();
         CreateCommandBuffer();
-        CreateUniformBuffers();
-        CreateDescriptorPool();
-        CreateDescriptorSets();
         CreateSyncObjects();
     }
 
@@ -935,8 +884,6 @@ public unsafe class LoadingModelsApplication : IDisposable
         vk.ResetFences(device, 1, inFlightFences[currentFrame]);
 
         vk.ResetCommandBuffer(commandBuffers[currentFrame], 0);
-
-        UpdateUniformBuffer(currentFrame);
 
         RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
@@ -1681,9 +1628,9 @@ public unsafe class LoadingModelsApplication : IDisposable
     /// </summary>
     private void LoadModel()
     {
-        vampire = new Model(vk, physicalDevice, device, commandPool, graphicsQueue, "Resources/Models/Vampire/dancing_vampire.dae");
+        vampire = new Model(vk, physicalDevice, device, commandPool, graphicsQueue, descriptorSetLayout, "Resources/Models/Vampire/dancing_vampire.dae");
 
-        yousa = new Model(vk, physicalDevice, device, commandPool, graphicsQueue, "Resources/Models/大喜/模型/登门喜鹊泠鸢yousa-ver2.0/泠鸢yousa登门喜鹊153cm-Apose2.1完整版(2).pmx")
+        yousa = new Model(vk, physicalDevice, device, commandPool, graphicsQueue, descriptorSetLayout, "Resources/Models/大喜/模型/登门喜鹊泠鸢yousa-ver2.0/泠鸢yousa登门喜鹊153cm-Apose2.1完整版(2).pmx")
         {
             Transform = Matrix4X4.CreateScale(new Vector3D<float>(0.1f)) * Matrix4X4.CreateTranslation(2.0f, 0.0f, 0.0f)
         };
@@ -1739,105 +1686,6 @@ public unsafe class LoadingModelsApplication : IDisposable
         {
             throw new Exception("创建命令缓冲失败。");
         }
-    }
-
-    /// <summary>
-    /// 创建统一缓冲。
-    /// </summary>
-    private void CreateUniformBuffers()
-    {
-        ulong size = (ulong)Marshal.SizeOf<UniformBufferObject>();
-
-        uniformBuffers = new VkBuffer[MaxFramesInFlight];
-        uniformBuffersMemory = new DeviceMemory[MaxFramesInFlight];
-        uniformBuffersMapped = new void*[MaxFramesInFlight];
-
-        for (int i = 0; i < MaxFramesInFlight; i++)
-        {
-            vk.CreateBuffer(physicalDevice,
-                            device,
-                            size,
-                            BufferUsageFlags.UniformBufferBit,
-                            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
-                            out uniformBuffers[i],
-                            out uniformBuffersMemory[i]);
-
-            vk.MapMemory(device, uniformBuffersMemory[i], 0, size, 0, ref uniformBuffersMapped[i]);
-        }
-    }
-
-    /// <summary>
-    /// 创建描述符池。
-    /// </summary>
-    private void CreateDescriptorPool()
-    {
-        DescriptorPoolSize[] poolSizes = new DescriptorPoolSize[]
-        {
-            new DescriptorPoolSize
-            {
-                Type = DescriptorType.UniformBuffer,
-                DescriptorCount = MaxFramesInFlight
-            },
-            new DescriptorPoolSize
-            {
-                Type = DescriptorType.CombinedImageSampler,
-                DescriptorCount = MaxFramesInFlight
-            }
-        };
-
-        DescriptorPoolCreateInfo poolInfo = new()
-        {
-            SType = StructureType.DescriptorPoolCreateInfo,
-            PoolSizeCount = (uint)poolSizes.Length,
-            PPoolSizes = (DescriptorPoolSize*)Unsafe.AsPointer(ref poolSizes[0]),
-            MaxSets = MaxFramesInFlight
-        };
-
-        if (vk.CreateDescriptorPool(device, &poolInfo, null, out descriptorPool) != Result.Success)
-        {
-            throw new Exception("创建描述符池失败。");
-        }
-    }
-
-    /// <summary>
-    /// 创建描述符集。
-    /// </summary>
-    private void CreateDescriptorSets()
-    {
-        DescriptorSetLayout[] layouts = new DescriptorSetLayout[MaxFramesInFlight];
-        Array.Fill(layouts, descriptorSetLayout);
-
-        DescriptorSetAllocateInfo allocateInfo = new()
-        {
-            SType = StructureType.DescriptorSetAllocateInfo,
-            DescriptorPool = descriptorPool,
-            DescriptorSetCount = MaxFramesInFlight,
-            PSetLayouts = (DescriptorSetLayout*)Unsafe.AsPointer(ref layouts[0])
-        };
-
-        descriptorSets = new DescriptorSet[MaxFramesInFlight];
-
-        if (vk.AllocateDescriptorSets(device, &allocateInfo, (DescriptorSet*)Unsafe.AsPointer(ref descriptorSets[0])) != Result.Success)
-        {
-            throw new Exception("创建描述符集失败。");
-        }
-    }
-
-    /// <summary>
-    /// 更新统一缓冲。
-    /// </summary>
-    /// <param name="currentFrame"></param>
-    private void UpdateUniformBuffer(uint currentFrame)
-    {
-        UniformBufferObject ubo = new()
-        {
-            Model = Matrix4X4<float>.Identity,
-            View = camera.View,
-            Projection = camera.Projection
-        };
-        ubo.Projection.M22 *= -1.0f;
-
-        Buffer.MemoryCopy(&ubo, uniformBuffersMapped[currentFrame], Marshal.SizeOf<UniformBufferObject>(), Marshal.SizeOf<UniformBufferObject>());
     }
 
     /// <summary>
@@ -2080,16 +1928,6 @@ public unsafe class LoadingModelsApplication : IDisposable
 
         vampire.Dispose();
         yousa.Dispose();
-
-        for (int i = 0; i < MaxFramesInFlight; i++)
-        {
-            vk.DestroyBuffer(device, uniformBuffers[i], null);
-            vk.FreeMemory(device, uniformBuffersMemory[i], null);
-        }
-
-        vk.DestroyDescriptorPool(device, descriptorPool, null);
-
-        vk.DestroyDescriptorSetLayout(device, descriptorSetLayout, null);
 
         for (int i = 0; i < MaxFramesInFlight; i++)
         {
