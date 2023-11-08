@@ -487,6 +487,9 @@ public unsafe class LoadingModelsApplication : IDisposable
 
         public void Dispose()
         {
+            _diffuse.Dispose();
+            _specular.Dispose();
+
             _vk.DestroyBuffer(_device, vertexBuffer, null);
             _vk.FreeMemory(_device, vertexBufferMemory, null);
             _vk.DestroyBuffer(_device, indexBuffer, null);
@@ -504,6 +507,13 @@ public unsafe class LoadingModelsApplication : IDisposable
         private readonly CommandPool _commandPool;
         private readonly Queue _graphicsQueue;
 
+        private VkBuffer uniformBuffer;
+        private DeviceMemory uniformBufferMemory;
+        private void* uniformBufferMapped;
+        private DescriptorSetLayout descriptorSetLayout;
+        private DescriptorPool descriptorPool;
+        private DescriptorSet[] descriptorSets = null!;
+
         public Mesh[] Meshes { get; }
 
         public Matrix4X4<float> Transform { get; set; } = Matrix4X4<float>.Identity;
@@ -516,6 +526,21 @@ public unsafe class LoadingModelsApplication : IDisposable
             _commandPool = commandPool;
             _graphicsQueue = graphicsQueue;
 
+            Meshes = LoadModel(file);
+
+            CreateUniformBuffer();
+            CreateDescriptorSetLayout();
+            CreateDescriptorPool();
+            AllocateDescriptorSet();
+        }
+
+        /// <summary>
+        /// 加载模型。
+        /// </summary>
+        /// <param name="file">file</param>
+        /// <returns></returns>
+        private Mesh[] LoadModel(string file)
+        {
             string directory = Path.GetDirectoryName(file)!;
 
             using Assimp assimp = Assimp.GetApi();
@@ -533,27 +558,187 @@ public unsafe class LoadingModelsApplication : IDisposable
 
             List<Mesh> meshes = new();
 
-            ProcessNode(directory, assimp, scene->MRootNode, scene, meshes);
+            ProcessNode(scene->MRootNode, scene, meshes);
 
-            Meshes = meshes.ToArray();
+            return meshes.ToArray();
+
+            void ProcessNode(Node* node, Scene* scene, List<Mesh> meshes)
+            {
+                for (uint i = 0; i < node->MNumMeshes; i++)
+                {
+                    AiMesh* mesh = scene->MMeshes[node->MMeshes[i]];
+
+                    meshes.Add(new Mesh(_vk, _physicalDevice, _device, _commandPool, _graphicsQueue, directory, assimp, scene, mesh));
+                }
+
+                for (uint i = 0; i < node->MNumChildren; i++)
+                {
+                    ProcessNode(node->MChildren[i], scene, meshes);
+                }
+            }
         }
 
-        private void ProcessNode(string directory, Assimp assimp, Node* node, Scene* scene, List<Mesh> meshes)
+        /// <summary>
+        /// 创建统一缓冲区。
+        /// </summary>
+        private void CreateUniformBuffer()
         {
-            for (uint i = 0; i < node->MNumMeshes; i++)
-            {
-                AiMesh* mesh = scene->MMeshes[node->MMeshes[i]];
+            ulong size = (ulong)Marshal.SizeOf<UniformBufferObject>();
 
-                meshes.Add(new Mesh(_vk, _physicalDevice, _device, _commandPool, _graphicsQueue, directory, assimp, scene, mesh));
-            }
+            _vk.CreateBuffer(_physicalDevice,
+                             _device,
+                             size,
+                             BufferUsageFlags.UniformBufferBit,
+                             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
+                             out uniformBuffer,
+                             out uniformBufferMemory);
 
-            for (uint i = 0; i < node->MNumChildren; i++)
+            _vk.MapMemory(_device, uniformBufferMemory, 0, size, 0, ref uniformBufferMapped);
+        }
+
+        /// <summary>
+        /// 创建描述符布局。
+        /// </summary>
+        private void CreateDescriptorSetLayout()
+        {
+            DescriptorSetLayoutBinding uboLayoutBinding = new()
             {
-                ProcessNode(directory, assimp, node->MChildren[i], scene, meshes);
+                Binding = 0,
+                DescriptorType = DescriptorType.UniformBuffer,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.VertexBit,
+                PImmutableSamplers = null
+            };
+
+            DescriptorSetLayoutBinding samplerLayoutBinding = new()
+            {
+                Binding = 1,
+                DescriptorType = DescriptorType.CombinedImageSampler,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.FragmentBit,
+                PImmutableSamplers = null
+            };
+
+            DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
+            {
+                uboLayoutBinding,
+                samplerLayoutBinding
+            };
+
+            DescriptorSetLayoutCreateInfo layoutInfo = new()
+            {
+                SType = StructureType.DescriptorSetLayoutCreateInfo,
+                BindingCount = (uint)bindings.Length,
+                PBindings = (DescriptorSetLayoutBinding*)Unsafe.AsPointer(ref bindings[0])
+            };
+
+            if (_vk.CreateDescriptorSetLayout(_device, &layoutInfo, null, out descriptorSetLayout) != Result.Success)
+            {
+                throw new Exception("创建描述符布局失败。");
             }
         }
 
-        public void Record(CommandBuffer commandBuffer, PipelineLayout pipelineLayout, DescriptorSet descriptorSet, VkBuffer uniformBuffer, void* uniformBufferMapped, Camera camera)
+        /// <summary>
+        /// 创建描述符池。
+        /// </summary>
+        private void CreateDescriptorPool()
+        {
+            DescriptorPoolSize[] poolSizes = new DescriptorPoolSize[]
+            {
+                new DescriptorPoolSize
+                {
+                    Type = DescriptorType.UniformBuffer,
+                    DescriptorCount = (uint)Meshes.Length
+                },
+                new DescriptorPoolSize
+                {
+                    Type = DescriptorType.CombinedImageSampler,
+                    DescriptorCount = (uint)Meshes.Length
+                }
+            };
+
+            DescriptorPoolCreateInfo poolInfo = new()
+            {
+                SType = StructureType.DescriptorPoolCreateInfo,
+                PoolSizeCount = (uint)poolSizes.Length,
+                PPoolSizes = (DescriptorPoolSize*)Unsafe.AsPointer(ref poolSizes[0]),
+                MaxSets = (uint)Meshes.Length
+            };
+
+            if (_vk.CreateDescriptorPool(_device, &poolInfo, null, out descriptorPool) != Result.Success)
+            {
+                throw new Exception("创建描述符池失败。");
+            }
+        }
+
+        /// <summary>
+        /// 分配描述符集。
+        /// </summary>
+        private void AllocateDescriptorSet()
+        {
+            DescriptorSetLayout[] layouts = new DescriptorSetLayout[Meshes.Length];
+            Array.Fill(layouts, descriptorSetLayout);
+
+            DescriptorSetAllocateInfo allocateInfo = new()
+            {
+                SType = StructureType.DescriptorSetAllocateInfo,
+                DescriptorPool = descriptorPool,
+                DescriptorSetCount = (uint)Meshes.Length,
+                PSetLayouts = (DescriptorSetLayout*)Unsafe.AsPointer(ref layouts[0])
+            };
+
+            descriptorSets = new DescriptorSet[Meshes.Length];
+
+            if (_vk.AllocateDescriptorSets(_device, &allocateInfo, (DescriptorSet*)Unsafe.AsPointer(ref descriptorSets[0])) != Result.Success)
+            {
+                throw new Exception("创建描述符集失败。");
+            }
+
+            for (int i = 0; i < Meshes.Length; i++)
+            {
+                DescriptorBufferInfo bufferInfo = new()
+                {
+                    Buffer = uniformBuffer,
+                    Offset = 0,
+                    Range = (ulong)Marshal.SizeOf<UniformBufferObject>()
+                };
+
+                DescriptorImageInfo imageInfo = new()
+                {
+                    Sampler = Meshes[i].Diffuse.Sampler,
+                    ImageView = Meshes[i].Diffuse.ImageView,
+                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal
+                };
+
+                WriteDescriptorSet[] descriptorWrites = new[]
+                {
+                    new WriteDescriptorSet
+                    {
+                        SType = StructureType.WriteDescriptorSet,
+                        DstSet = descriptorSets[i],
+                        DstBinding = 0,
+                        DstArrayElement = 0,
+                        DescriptorType = DescriptorType.UniformBuffer,
+                        DescriptorCount = 1,
+                        PBufferInfo = &bufferInfo
+                    },
+                    new WriteDescriptorSet
+                    {
+                        SType = StructureType.WriteDescriptorSet,
+                        DstSet = descriptorSets[i],
+                        DstBinding = 1,
+                        DstArrayElement = 0,
+                        DescriptorType = DescriptorType.CombinedImageSampler,
+                        DescriptorCount = 1,
+                        PImageInfo = &imageInfo
+                    }
+                };
+
+                _vk.UpdateDescriptorSets(_device, (uint)descriptorWrites.Length, (WriteDescriptorSet*)Unsafe.AsPointer(ref descriptorWrites[0]), 0, null);
+            }
+        }
+
+        public void Record(CommandBuffer commandBuffer, PipelineLayout pipelineLayout, Camera camera)
         {
             UniformBufferObject ubo = new()
             {
@@ -565,47 +750,10 @@ public unsafe class LoadingModelsApplication : IDisposable
 
             Buffer.MemoryCopy(&ubo, uniformBufferMapped, Marshal.SizeOf<UniformBufferObject>(), Marshal.SizeOf<UniformBufferObject>());
 
+            int index = 0;
             foreach (Mesh mesh in Meshes)
             {
-                DescriptorBufferInfo bufferInfo = new()
-                {
-                    Buffer = uniformBuffer,
-                    Offset = 0,
-                    Range = (ulong)Marshal.SizeOf<UniformBufferObject>()
-                };
-
-                DescriptorImageInfo imageInfo = new()
-                {
-                    Sampler = mesh.Diffuse.Sampler,
-                    ImageView = mesh.Diffuse.ImageView,
-                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal
-                };
-
-                WriteDescriptorSet[] descriptorWrites = new[]
-                {
-                    new WriteDescriptorSet
-                    {
-                        SType = StructureType.WriteDescriptorSet,
-                        DstSet = descriptorSet,
-                        DstBinding = 0,
-                        DstArrayElement = 0,
-                        DescriptorType = DescriptorType.UniformBuffer,
-                        DescriptorCount = 1,
-                        PBufferInfo = &bufferInfo
-                    },
-                    new WriteDescriptorSet
-                    {
-                        SType = StructureType.WriteDescriptorSet,
-                        DstSet = descriptorSet,
-                        DstBinding = 1,
-                        DstArrayElement = 0,
-                        DescriptorType = DescriptorType.CombinedImageSampler,
-                        DescriptorCount = 1,
-                        PImageInfo = &imageInfo
-                    }
-                };
-
-                _vk.UpdateDescriptorSets(_device, (uint)descriptorWrites.Length, (WriteDescriptorSet*)Unsafe.AsPointer(ref descriptorWrites[0]), 0, null);
+                DescriptorSet descriptorSet = descriptorSets[index++];
 
                 _vk.CmdBindVertexBuffers(commandBuffer, 0, 1, mesh.VertexBuffer, 0);
                 _vk.CmdBindIndexBuffer(commandBuffer, mesh.IndexBuffer, 0, IndexType.Uint32);
@@ -621,6 +769,9 @@ public unsafe class LoadingModelsApplication : IDisposable
             {
                 mesh.Dispose();
             }
+
+            _vk.DestroyDescriptorPool(_device, descriptorPool, null);
+            _vk.DestroyDescriptorSetLayout(_device, descriptorSetLayout, null);
 
             GC.SuppressFinalize(this);
         }
@@ -695,6 +846,7 @@ public unsafe class LoadingModelsApplication : IDisposable
     private DebugUtilsMessengerEXT debugMessenger;
 
     private Model vampire = null!;
+    private Model yousa = null!;
 
     public void Run()
     {
@@ -1530,6 +1682,11 @@ public unsafe class LoadingModelsApplication : IDisposable
     private void LoadModel()
     {
         vampire = new Model(vk, physicalDevice, device, commandPool, graphicsQueue, "Resources/Models/Vampire/dancing_vampire.dae");
+
+        yousa = new Model(vk, physicalDevice, device, commandPool, graphicsQueue, "Resources/Models/大喜/模型/登门喜鹊泠鸢yousa-ver2.0/泠鸢yousa登门喜鹊153cm-Apose2.1完整版(2).pmx")
+        {
+            Transform = Matrix4X4.CreateScale(new Vector3D<float>(0.1f)) * Matrix4X4.CreateTranslation(2.0f, 0.0f, 0.0f)
+        };
     }
 
     /// <summary>
@@ -1769,7 +1926,8 @@ public unsafe class LoadingModelsApplication : IDisposable
         };
         vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
 
-        vampire.Record(commandBuffer, pipelineLayout, descriptorSets[currentFrame], uniformBuffers[currentFrame], uniformBuffersMapped[currentFrame], camera);
+        vampire.Record(commandBuffer, pipelineLayout, camera);
+        yousa.Record(commandBuffer, pipelineLayout, camera);
 
         vk.CmdEndRenderPass(commandBuffer);
 
@@ -1921,6 +2079,7 @@ public unsafe class LoadingModelsApplication : IDisposable
         vk.DestroyRenderPass(device, renderPass, null);
 
         vampire.Dispose();
+        yousa.Dispose();
 
         for (int i = 0; i < MaxFramesInFlight; i++)
         {
