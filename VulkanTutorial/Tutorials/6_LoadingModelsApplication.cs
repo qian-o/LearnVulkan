@@ -1386,7 +1386,7 @@ public unsafe class LoadingModelsApplication : IDisposable
             RasterizerDiscardEnable = Vk.False,
             PolygonMode = PolygonMode.Fill,
             LineWidth = 1.0f,
-            CullMode = CullModeFlags.BackBit,
+            CullMode = CullModeFlags.None,
             FrontFace = FrontFace.CounterClockwise,
             DepthBiasEnable = Vk.False
         };
