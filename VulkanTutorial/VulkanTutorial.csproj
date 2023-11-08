@@ -9,16 +9,33 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Silk.NET.Assimp" Version="2.18.0" />
 		<PackageReference Include="Silk.NET.Input" Version="2.18.0" />
 		<PackageReference Include="Silk.NET.Maths" Version="2.18.0" />
 		<PackageReference Include="Silk.NET.Vulkan" Version="2.18.0" />
 		<PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.18.0" />
 		<PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.18.0" />
 		<PackageReference Include="Silk.NET.Windowing" Version="2.18.0" />
+		<PackageReference Include="SkiaSharp" Version="2.88.6" />
 		<PackageReference Include="StbImageSharp" Version="2.27.13" />
 	</ItemGroup>
 
 	<ItemGroup>
+		<None Update="Resources\Models\Vampire\dancing_vampire.dae">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Models\Vampire\textures\Vampire_diffuse.png">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Models\Vampire\textures\Vampire_emission.png">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Models\Vampire\textures\Vampire_normal.png">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Models\Vampire\textures\Vampire_specular.png">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 		<None Update="Shaders\DepthBufferingApplication\frag.spv">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
@@ -29,6 +46,12 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 		<None Update="Shaders\HelloTriangleApplication\vert.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\LoadingModelsApplication\frag.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\LoadingModelsApplication\vert.spv">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 		<None Update="Shaders\TextureMappingApplication\frag.spv">
@@ -50,6 +73,9 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 		<None Update="Textures\DepthBufferingApplication\texture.jpg">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Textures\LoadingModelsApplication\texture.jpg">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 		<None Update="Textures\TextureMappingApplication\texture.jpg">

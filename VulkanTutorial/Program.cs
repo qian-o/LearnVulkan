@@ -8,7 +8,7 @@ internal class Program
     {
         _ = args;
 
-        using DepthBufferingApplication app = new();
+        using LoadingModelsApplication app = new();
 
         app.Run();
     }
