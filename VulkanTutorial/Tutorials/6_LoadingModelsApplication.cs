@@ -698,7 +698,6 @@ public unsafe class LoadingModelsApplication : IDisposable
 
     public void Run()
     {
-
         WindowOptions options = WindowOptions.DefaultVulkan;
         options.Size = new Vector2D<int>((int)Width, (int)Height);
         options.Title = "Vulkan Tutorial";
