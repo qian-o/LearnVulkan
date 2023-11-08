@@ -521,7 +521,7 @@ public unsafe class TextureMappingApplication : IDisposable
 
         for (int i = 0; i < swapchainImages.Length; i++)
         {
-            swapchainImageViews[i] = vk.CreateImageView(device, swapchainImages[i], surfaceFormat.Format);
+            swapchainImageViews[i] = vk.CreateImageView(device, swapchainImages[i], surfaceFormat.Format, ImageAspectFlags.ColorBit);
         }
     }
 
@@ -852,6 +852,7 @@ public unsafe class TextureMappingApplication : IDisposable
                                  commandPool,
                                  graphicsQueue,
                                  textureImage,
+                                 Format.R8G8B8A8Srgb,
                                  ImageLayout.Undefined,
                                  ImageLayout.TransferDstOptimal);
 
@@ -867,6 +868,7 @@ public unsafe class TextureMappingApplication : IDisposable
                                  commandPool,
                                  graphicsQueue,
                                  textureImage,
+                                 Format.R8G8B8A8Srgb,
                                  ImageLayout.TransferDstOptimal,
                                  ImageLayout.ShaderReadOnlyOptimal);
     }
@@ -876,7 +878,7 @@ public unsafe class TextureMappingApplication : IDisposable
     /// </summary>
     private void CreateTextureImageView()
     {
-        textureImageView = vk.CreateImageView(device, textureImage, Format.R8G8B8A8Srgb);
+        textureImageView = vk.CreateImageView(device, textureImage, Format.R8G8B8A8Srgb, ImageAspectFlags.ColorBit);
     }
 
     /// <summary>
@@ -1191,9 +1193,9 @@ public unsafe class TextureMappingApplication : IDisposable
 
         UniformBufferObject ubo = new()
         {
-            Model = Matrix4X4.CreateRotationZ((float)time * Utils.DegreesToRadians(45.0f)),
+            Model = Matrix4X4.CreateRotationZ((float)time * Scalar.DegreesToRadians(45.0f)),
             View = Matrix4X4.CreateLookAt(new Vector3D<float>(0.0f, 0.0f, 4.0f), Vector3D<float>.Zero, Vector3D<float>.UnitY),
-            Projection = Matrix4X4.CreatePerspectiveFieldOfView(Utils.DegreesToRadians(45.0f),
+            Projection = Matrix4X4.CreatePerspectiveFieldOfView(Scalar.DegreesToRadians(45.0f),
                                                                 extent.Width / extent.Height,
                                                                 0.1f,
                                                                 100.0f)

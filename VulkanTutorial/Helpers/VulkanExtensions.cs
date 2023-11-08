@@ -268,7 +268,7 @@ public static unsafe class VulkanExtensions
     /// <param name="image">image</param>
     /// <param name="oldLayout">oldLayout</param>
     /// <param name="newLayout">newLayout</param>
-    public static void TransitionImageLayout(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, Image image, ImageLayout oldLayout, ImageLayout newLayout)
+    public static void TransitionImageLayout(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, Image image, Format format, ImageLayout oldLayout, ImageLayout newLayout)
     {
         CommandBuffer commandBuffer = vk.BeginSingleTimeCommands(device, commandPool);
 
@@ -282,7 +282,6 @@ public static unsafe class VulkanExtensions
             Image = image,
             SubresourceRange = new ImageSubresourceRange
             {
-                AspectMask = ImageAspectFlags.ColorBit,
                 BaseMipLevel = 0,
                 LevelCount = 1,
                 BaseArrayLayer = 0,
@@ -291,6 +290,20 @@ public static unsafe class VulkanExtensions
             SrcAccessMask = AccessFlags.None,
             DstAccessMask = AccessFlags.None
         };
+
+        if (newLayout == ImageLayout.DepthStencilAttachmentOptimal)
+        {
+            barrier.SubresourceRange.AspectMask = ImageAspectFlags.DepthBit;
+
+            if (format.HasStencilComponent())
+            {
+                barrier.SubresourceRange.AspectMask |= ImageAspectFlags.StencilBit;
+            }
+        }
+        else
+        {
+            barrier.SubresourceRange.AspectMask = ImageAspectFlags.ColorBit;
+        }
 
         PipelineStageFlags sourceStage;
         PipelineStageFlags destinationStage;
@@ -310,6 +323,14 @@ public static unsafe class VulkanExtensions
 
             sourceStage = PipelineStageFlags.TransferBit;
             destinationStage = PipelineStageFlags.FragmentShaderBit;
+        }
+        else if (oldLayout == ImageLayout.Undefined && newLayout == ImageLayout.DepthStencilAttachmentOptimal)
+        {
+            barrier.SrcAccessMask = AccessFlags.None;
+            barrier.DstAccessMask = AccessFlags.DepthStencilAttachmentReadBit | AccessFlags.DepthStencilAttachmentWriteBit;
+
+            sourceStage = PipelineStageFlags.TopOfPipeBit;
+            destinationStage = PipelineStageFlags.EarlyFragmentTestsBit;
         }
         else
         {
@@ -421,7 +442,7 @@ public static unsafe class VulkanExtensions
     /// <param name="image">image</param>
     /// <param name="format">format</param>
     /// <returns></returns>
-    public static ImageView CreateImageView(this Vk vk, Device device, Image image, Format format)
+    public static ImageView CreateImageView(this Vk vk, Device device, Image image, Format format, ImageAspectFlags aspectFlags)
     {
         ImageViewCreateInfo viewInfo = new()
         {
@@ -431,7 +452,7 @@ public static unsafe class VulkanExtensions
             Format = format,
             SubresourceRange = new ImageSubresourceRange
             {
-                AspectMask = ImageAspectFlags.ColorBit,
+                AspectMask = aspectFlags,
                 BaseMipLevel = 0,
                 LevelCount = 1,
                 BaseArrayLayer = 0,
@@ -445,5 +466,54 @@ public static unsafe class VulkanExtensions
         }
 
         return imageView;
+    }
+
+    /// <summary>
+    /// 查找支持的格式。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="physicalDevice">physicalDevice</param>
+    /// <param name="candidates">candidates</param>
+    /// <param name="tiling">tiling</param>
+    /// <param name="features">features</param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public static Format FindSupportedFormat(this Vk vk, PhysicalDevice physicalDevice, Format[] candidates, ImageTiling tiling, FormatFeatureFlags features)
+    {
+        foreach (Format format in candidates)
+        {
+            FormatProperties props;
+            vk.GetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+
+            if (tiling == ImageTiling.Linear && props.LinearTilingFeatures.HasFlag(features))
+            {
+                return format;
+            }
+            else if (tiling == ImageTiling.Optimal && props.OptimalTilingFeatures.HasFlag(features))
+            {
+                return format;
+            }
+        }
+
+        throw new Exception("无法找到合适的格式！");
+    }
+
+    /// <summary>
+    /// 查找合适的深度格式。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="physicalDevice">physicalDevice</param>
+    /// <returns></returns>
+    public static Format FindDepthFormat(this Vk vk, PhysicalDevice physicalDevice)
+    {
+        return vk.FindSupportedFormat(physicalDevice,
+                                      new[] { Format.D32Sfloat, Format.D32SfloatS8Uint, Format.D24UnormS8Uint },
+                                      ImageTiling.Optimal,
+                                      FormatFeatureFlags.DepthStencilAttachmentBit);
+    }
+
+    public static bool HasStencilComponent(this Format format)
+    {
+        return format == Format.D32SfloatS8Uint || format == Format.D24UnormS8Uint;
     }
 }

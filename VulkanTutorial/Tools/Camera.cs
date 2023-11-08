@@ -26,10 +26,10 @@ public class Camera
 
     public float Pitch
     {
-        get => Utils.RadiansToDegrees(pitch);
+        get => Scalar.RadiansToDegrees(pitch);
         set
         {
-            pitch = Utils.DegreesToRadians(Utils.Clamp(value, -89f, 89f));
+            pitch = Scalar.DegreesToRadians(Utils.Clamp(value, -89f, 89f));
 
             UpdateVectors();
         }
@@ -37,10 +37,10 @@ public class Camera
 
     public float Yaw
     {
-        get => Utils.RadiansToDegrees(yaw);
+        get => Scalar.RadiansToDegrees(yaw);
         set
         {
-            yaw = Utils.DegreesToRadians(value);
+            yaw = Scalar.DegreesToRadians(value);
 
             UpdateVectors();
         }
@@ -48,10 +48,10 @@ public class Camera
 
     public float Fov
     {
-        get => Utils.RadiansToDegrees(fov);
+        get => Scalar.RadiansToDegrees(fov);
         set
         {
-            fov = Utils.DegreesToRadians(Utils.Clamp(value, 1f, 90f));
+            fov = Scalar.DegreesToRadians(Utils.Clamp(value, 1f, 90f));
         }
     }
 

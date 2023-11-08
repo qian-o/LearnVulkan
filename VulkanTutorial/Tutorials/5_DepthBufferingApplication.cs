@@ -45,7 +45,7 @@ public unsafe class DepthBufferingApplication : IDisposable
                 {
                     Binding = 0,
                     Location = 0,
-                    Format = Format.R32G32Sfloat,
+                    Format = Format.R32G32B32Sfloat,
                     Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(Pos))
                 },
                 new VertexInputAttributeDescription
@@ -72,10 +72,10 @@ public unsafe class DepthBufferingApplication : IDisposable
         new Vertex() { Pos = new Vector3D<float>( 0.5f,  0.5f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
         new Vertex() { Pos = new Vector3D<float>(-0.5f,  0.5f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 0.0f) },
 
-        new Vertex() { Pos = new Vector3D<float>(0.0f, 0.0f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
-        new Vertex() { Pos = new Vector3D<float>(1.0f, 0.0f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 1.0f) },
-        new Vertex() { Pos = new Vector3D<float>(1.0f, 1.0f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
-        new Vertex() { Pos = new Vector3D<float>(0.0f, 1.0f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 0.0f) }
+        new Vertex() { Pos = new Vector3D<float>(0.0f, 0.0f, -0.5f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
+        new Vertex() { Pos = new Vector3D<float>(1.0f, 0.0f, -0.5f), TexCoord = new Vector2D<float>(1.0f, 1.0f) },
+        new Vertex() { Pos = new Vector3D<float>(1.0f, 1.0f, -0.5f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
+        new Vertex() { Pos = new Vector3D<float>(0.0f, 1.0f, -0.5f), TexCoord = new Vector2D<float>(0.0f, 0.0f) }
     };
 
     private readonly uint[] indices = new uint[]
@@ -123,6 +123,9 @@ public unsafe class DepthBufferingApplication : IDisposable
     private DescriptorSetLayout descriptorSetLayout;
     private PipelineLayout pipelineLayout;
     private Pipeline graphicsPipeline;
+    private VkImage depthImage;
+    private DeviceMemory depthImageMemory;
+    private ImageView depthImageView;
     private VkImage textureImage;
     private DeviceMemory textureImageMemory;
     private ImageView textureImageView;
@@ -199,8 +202,9 @@ public unsafe class DepthBufferingApplication : IDisposable
         CreateRenderPass();
         CreateDescriptorSetLayout();
         CreateGraphicsPipeline();
-        CreateFramebuffers();
         CreateCommandPool();
+        CreateDepthResources();
+        CreateFramebuffers();
         CreateTextureImage();
         CreateTextureImageView();
         CreateTextureSampler();
@@ -610,7 +614,7 @@ public unsafe class DepthBufferingApplication : IDisposable
 
         for (int i = 0; i < swapchainImages.Length; i++)
         {
-            swapchainImageViews[i] = vk.CreateImageView(device, swapchainImages[i], surfaceFormat.Format);
+            swapchainImageViews[i] = vk.CreateImageView(device, swapchainImages[i], surfaceFormat.Format, ImageAspectFlags.ColorBit);
         }
     }
 
@@ -631,34 +635,59 @@ public unsafe class DepthBufferingApplication : IDisposable
             FinalLayout = ImageLayout.PresentSrcKhr
         };
 
+        AttachmentDescription depthAttachment = new()
+        {
+            Format = vk.FindDepthFormat(physicalDevice),
+            Samples = SampleCountFlags.Count1Bit,
+            LoadOp = AttachmentLoadOp.Clear,
+            StoreOp = AttachmentStoreOp.DontCare,
+            StencilLoadOp = AttachmentLoadOp.DontCare,
+            StencilStoreOp = AttachmentStoreOp.DontCare,
+            InitialLayout = ImageLayout.Undefined,
+            FinalLayout = ImageLayout.DepthStencilAttachmentOptimal
+        };
+
         AttachmentReference colorAttachmentRef = new()
         {
             Attachment = 0,
             Layout = ImageLayout.ColorAttachmentOptimal
         };
 
+        AttachmentReference depthAttachmentRef = new()
+        {
+            Attachment = 1,
+            Layout = ImageLayout.DepthStencilAttachmentOptimal
+        };
+
         SubpassDescription subpass = new()
         {
             PipelineBindPoint = PipelineBindPoint.Graphics,
             ColorAttachmentCount = 1,
-            PColorAttachments = &colorAttachmentRef
+            PColorAttachments = &colorAttachmentRef,
+            PDepthStencilAttachment = &depthAttachmentRef
         };
 
         SubpassDependency dependency = new()
         {
             SrcSubpass = Vk.SubpassExternal,
             DstSubpass = 0,
-            SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+            SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
             SrcAccessMask = 0,
-            DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
-            DstAccessMask = AccessFlags.ColorAttachmentWriteBit
+            DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
+            DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit
+        };
+
+        AttachmentDescription[] attachments = new AttachmentDescription[]
+        {
+            colorAttachment,
+            depthAttachment
         };
 
         RenderPassCreateInfo renderPassInfo = new()
         {
             SType = StructureType.RenderPassCreateInfo,
-            AttachmentCount = 1,
-            PAttachments = &colorAttachment,
+            AttachmentCount = (uint)attachments.Length,
+            PAttachments = (AttachmentDescription*)Unsafe.AsPointer(ref attachments[0]),
             SubpassCount = 1,
             PSubpasses = &subpass,
             DependencyCount = 1,
@@ -832,7 +861,16 @@ public unsafe class DepthBufferingApplication : IDisposable
             RasterizationSamples = SampleCountFlags.Count1Bit
         };
 
-        // 深度和模板测试（暂时不用）
+        // 深度和模板测试
+        PipelineDepthStencilStateCreateInfo depthStencil = new()
+        {
+            SType = StructureType.PipelineDepthStencilStateCreateInfo,
+            DepthTestEnable = Vk.True,
+            DepthWriteEnable = Vk.True,
+            DepthCompareOp = CompareOp.Less,
+            DepthBoundsTestEnable = Vk.False,
+            StencilTestEnable = Vk.False
+        };
 
         // 颜色混合
         PipelineColorBlendAttachmentState colorBlendAttachment = new()
@@ -877,7 +915,7 @@ public unsafe class DepthBufferingApplication : IDisposable
             PViewportState = &viewportState,
             PRasterizationState = &rasterizer,
             PMultisampleState = &multisampling,
-            PDepthStencilState = null,
+            PDepthStencilState = &depthStencil,
             PColorBlendState = &colorBlending,
             PDynamicState = &dynamicState,
             Layout = pipelineLayout,
@@ -941,6 +979,7 @@ public unsafe class DepthBufferingApplication : IDisposable
                                  commandPool,
                                  graphicsQueue,
                                  textureImage,
+                                 Format.R8G8B8A8Srgb,
                                  ImageLayout.Undefined,
                                  ImageLayout.TransferDstOptimal);
 
@@ -956,6 +995,7 @@ public unsafe class DepthBufferingApplication : IDisposable
                                  commandPool,
                                  graphicsQueue,
                                  textureImage,
+                                 Format.R8G8B8A8Srgb,
                                  ImageLayout.TransferDstOptimal,
                                  ImageLayout.ShaderReadOnlyOptimal);
     }
@@ -965,7 +1005,7 @@ public unsafe class DepthBufferingApplication : IDisposable
     /// </summary>
     private void CreateTextureImageView()
     {
-        textureImageView = vk.CreateImageView(device, textureImage, Format.R8G8B8A8Srgb);
+        textureImageView = vk.CreateImageView(device, textureImage, Format.R8G8B8A8Srgb, ImageAspectFlags.ColorBit);
     }
 
     /// <summary>
@@ -1015,7 +1055,8 @@ public unsafe class DepthBufferingApplication : IDisposable
         {
             ImageView[] attachments = new ImageView[]
             {
-                swapchainImageViews[i]
+                swapchainImageViews[i],
+                depthImageView
             };
 
             FramebufferCreateInfo framebufferInfo = new()
@@ -1052,6 +1093,37 @@ public unsafe class DepthBufferingApplication : IDisposable
         {
             throw new Exception("创建命令池失败。");
         }
+    }
+
+    /// <summary>
+    /// 创建深度缓冲。
+    /// </summary>
+    private void CreateDepthResources()
+    {
+        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+
+        Format depthFormat = vk.FindDepthFormat(physicalDevice);
+
+        vk.CreateImage(physicalDevice,
+                       device,
+                       extent.Width,
+                       extent.Height,
+                       depthFormat,
+                       ImageTiling.Optimal,
+                       ImageUsageFlags.DepthStencilAttachmentBit,
+                       MemoryPropertyFlags.DeviceLocalBit,
+                       out depthImage,
+                       out depthImageMemory);
+
+        depthImageView = vk.CreateImageView(device, depthImage, depthFormat, ImageAspectFlags.DepthBit);
+
+        vk.TransitionImageLayout(device,
+                                 commandPool,
+                                 graphicsQueue,
+                                 depthImage,
+                                 depthFormat,
+                                 ImageLayout.Undefined,
+                                 ImageLayout.DepthStencilAttachmentOptimal);
     }
 
     /// <summary>
@@ -1280,6 +1352,7 @@ public unsafe class DepthBufferingApplication : IDisposable
             View = camera.View,
             Projection = camera.Projection
         };
+        ubo.Projection.M22 *= -1.0f;
 
         Buffer.MemoryCopy(&ubo, uniformBuffersMapped[currentFrame], Marshal.SizeOf<UniformBufferObject>(), Marshal.SizeOf<UniformBufferObject>());
     }
@@ -1319,18 +1392,30 @@ public unsafe class DepthBufferingApplication : IDisposable
             }
         };
 
-        ClearValue clearColor = new()
+        ClearValue[] clearValues = new[]
         {
-            Color = new ClearColorValue
+            new ClearValue()
             {
-                Float32_0 = 0.0f,
-                Float32_1 = 0.0f,
-                Float32_2 = 0.0f,
-                Float32_3 = 1.0f
+                Color = new ClearColorValue
+                {
+                    Float32_0 = 0.0f,
+                    Float32_1 = 0.0f,
+                    Float32_2 = 0.0f,
+                    Float32_3 = 1.0f
+                }
+            },
+            new ClearValue()
+            {
+                DepthStencil = new ClearDepthStencilValue
+                {
+                    Depth = 1.0f,
+                    Stencil = 0
+                }
             }
         };
-        renderPassBeginInfo.ClearValueCount = 1;
-        renderPassBeginInfo.PClearValues = &clearColor;
+
+        renderPassBeginInfo.ClearValueCount = (uint)clearValues.Length;
+        renderPassBeginInfo.PClearValues = (ClearValue*)Unsafe.AsPointer(ref clearValues[0]);
 
         vk.CmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, SubpassContents.Inline);
 
@@ -1339,9 +1424,9 @@ public unsafe class DepthBufferingApplication : IDisposable
         Viewport viewport = new()
         {
             X = 0.0f,
-            Y = extent.Height,
+            Y = 0.0f,
             Width = extent.Width,
-            Height = -extent.Height,
+            Height = extent.Height,
             MinDepth = 0.0f,
             MaxDepth = 1.0f
         };
@@ -1423,6 +1508,7 @@ public unsafe class DepthBufferingApplication : IDisposable
 
         CreateSwapChain();
         CreateImageViews();
+        CreateDepthResources();
         CreateFramebuffers();
     }
 
@@ -1431,6 +1517,10 @@ public unsafe class DepthBufferingApplication : IDisposable
     /// </summary>
     private void CleanupSwapChain()
     {
+        vk.DestroyImageView(device, depthImageView, null);
+        vk.DestroyImage(device, depthImage, null);
+        vk.FreeMemory(device, depthImageMemory, null);
+
         for (int i = 0; i < swapchainFramebuffers.Length; i++)
         {
             vk.DestroyFramebuffer(device, swapchainFramebuffers[i], null);
@@ -1505,12 +1595,6 @@ public unsafe class DepthBufferingApplication : IDisposable
 
         CleanupSwapChain();
 
-        vk.DestroySampler(device, textureSampler, null);
-        vk.DestroyImageView(device, textureImageView, null);
-
-        vk.DestroyImage(device, textureImage, null);
-        vk.FreeMemory(device, textureImageMemory, null);
-
         vk.DestroyPipeline(device, graphicsPipeline, null);
         vk.DestroyPipelineLayout(device, pipelineLayout, null);
         vk.DestroyRenderPass(device, renderPass, null);
@@ -1523,13 +1607,19 @@ public unsafe class DepthBufferingApplication : IDisposable
 
         vk.DestroyDescriptorPool(device, descriptorPool, null);
 
-        vk.DestroyDescriptorSetLayout(device, descriptorSetLayout, null);
+        vk.DestroySampler(device, textureSampler, null);
+        vk.DestroyImageView(device, textureImageView, null);
 
-        vk.DestroyBuffer(device, vertexBuffer, null);
-        vk.FreeMemory(device, vertexBufferMemory, null);
+        vk.DestroyImage(device, textureImage, null);
+        vk.FreeMemory(device, textureImageMemory, null);
+
+        vk.DestroyDescriptorSetLayout(device, descriptorSetLayout, null);
 
         vk.DestroyBuffer(device, indexBuffer, null);
         vk.FreeMemory(device, indexBufferMemory, null);
+
+        vk.DestroyBuffer(device, vertexBuffer, null);
+        vk.FreeMemory(device, vertexBufferMemory, null);
 
         for (int i = 0; i < MaxFramesInFlight; i++)
         {

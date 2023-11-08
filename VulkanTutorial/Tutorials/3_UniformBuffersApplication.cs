@@ -1053,9 +1053,9 @@ public unsafe class UniformBuffersApplication : IDisposable
 
         UniformBufferObject ubo = new()
         {
-            Model = Matrix4X4.CreateRotationZ((float)time * Utils.DegreesToRadians(45.0f)),
+            Model = Matrix4X4.CreateRotationZ((float)time * Scalar.DegreesToRadians(45.0f)),
             View = Matrix4X4.CreateLookAt(new Vector3D<float>(0.0f, 0.0f, 4.0f), Vector3D<float>.Zero, Vector3D<float>.UnitY),
-            Projection = Matrix4X4.CreatePerspectiveFieldOfView(Utils.DegreesToRadians(45.0f),
+            Projection = Matrix4X4.CreatePerspectiveFieldOfView(Scalar.DegreesToRadians(45.0f),
                                                                 extent.Width / extent.Height,
                                                                 0.1f,
                                                                 100.0f)
