@@ -8,7 +8,7 @@ internal class Program
     {
         _ = args;
 
-        using LoadingModelsApplication app = new();
+        using GeneratingMipmapsApplication app = new();
 
         app.Run();
     }

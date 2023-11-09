@@ -6,7 +6,7 @@ public unsafe class Utils
 {
     public const float Pi = 3.1415927f;
 
-    public const float PiOver2 = Pi / 2;
+    public const float PiOver2 = Pi / 2.0f;
 
     /// <summary>
     /// 字符串转指针。
