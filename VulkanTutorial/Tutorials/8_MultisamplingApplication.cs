@@ -1295,7 +1295,7 @@ public unsafe class MultisamplingApplication : IDisposable
             Format = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format,
             Samples = msaaSamples,
             LoadOp = AttachmentLoadOp.Clear,
-            StoreOp = AttachmentStoreOp.Store,
+            StoreOp = AttachmentStoreOp.DontCare,
             StencilLoadOp = AttachmentLoadOp.DontCare,
             StencilStoreOp = AttachmentStoreOp.DontCare,
             InitialLayout = ImageLayout.Undefined,
