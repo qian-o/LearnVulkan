@@ -1061,7 +1061,7 @@ public unsafe class LoadingModelsApplication : IDisposable
             throw new Exception("创建实例失败。");
         }
 
-        if (!vk.TryGetInstanceExtension(instance, out debugUtils))
+        if (VulkanExtensions.EnableValidationLayers && !vk.TryGetInstanceExtension(instance, out debugUtils))
         {
             throw new Exception("找不到调试扩展。");
         }
