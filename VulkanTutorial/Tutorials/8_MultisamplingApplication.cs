@@ -1567,7 +1567,13 @@ public unsafe class MultisamplingApplication : IDisposable
                              | ColorComponentFlags.GBit
                              | ColorComponentFlags.BBit
                              | ColorComponentFlags.ABit,
-            BlendEnable = Vk.False
+            BlendEnable = Vk.True,
+            SrcColorBlendFactor = BlendFactor.SrcAlpha,
+            DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
+            ColorBlendOp = BlendOp.Add,
+            SrcAlphaBlendFactor = BlendFactor.One,
+            DstAlphaBlendFactor = BlendFactor.Zero,
+            AlphaBlendOp = BlendOp.Add
         };
 
         PipelineColorBlendStateCreateInfo colorBlending = new()
