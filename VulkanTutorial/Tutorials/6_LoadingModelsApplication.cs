@@ -86,6 +86,8 @@ public unsafe class LoadingModelsApplication : IDisposable
         protected ImageView imageView;
         protected Sampler sampler;
 
+        private bool isDisposed;
+
         public ImageView ImageView => imageView;
 
         public Sampler Sampler => sampler;
@@ -156,6 +158,9 @@ public unsafe class LoadingModelsApplication : IDisposable
                                       ImageLayout.ShaderReadOnlyOptimal);
 
             CreateViewAndSampler(format);
+
+            _vk.DestroyBuffer(_device, stagingBuffer, null);
+            _vk.FreeMemory(_device, stagingBufferMemory, null);
         }
 
         private void CreateViewAndSampler(Format format)
@@ -190,12 +195,19 @@ public unsafe class LoadingModelsApplication : IDisposable
 
         public void Dispose()
         {
+            if (isDisposed)
+            {
+                return;
+            }
+
             _vk.DestroySampler(_device, sampler, null);
             _vk.DestroyImageView(_device, imageView, null);
             _vk.DestroyImage(_device, image, null);
             _vk.FreeMemory(_device, imageMemory, null);
 
             GC.SuppressFinalize(this);
+
+            isDisposed = true;
         }
     }
 
@@ -727,6 +739,9 @@ public unsafe class LoadingModelsApplication : IDisposable
             {
                 mesh.Dispose();
             }
+
+            _vk.DestroyBuffer(_device, uniformBuffer, null);
+            _vk.FreeMemory(_device, uniformBufferMemory, null);
 
             _vk.DestroyDescriptorPool(_device, descriptorPool, null);
 
@@ -1922,12 +1937,14 @@ public unsafe class LoadingModelsApplication : IDisposable
 
         CleanupSwapChain();
 
+        vampire.Dispose();
+        yousa.Dispose();
+
+        vk.DestroyDescriptorSetLayout(device, descriptorSetLayout, null);
+
         vk.DestroyPipeline(device, graphicsPipeline, null);
         vk.DestroyPipelineLayout(device, pipelineLayout, null);
         vk.DestroyRenderPass(device, renderPass, null);
-
-        vampire.Dispose();
-        yousa.Dispose();
 
         for (int i = 0; i < MaxFramesInFlight; i++)
         {
@@ -1939,12 +1956,15 @@ public unsafe class LoadingModelsApplication : IDisposable
         vk.DestroyCommandPool(device, commandPool, null);
 
         khrSwapchain.Dispose();
+
         vk.DestroyDevice(device, null);
 
         debugUtils?.DestroyDebugUtilsMessenger(instance, debugMessenger, null);
+        khrSurface.DestroySurface(instance, surface, null);
 
         debugUtils?.Dispose();
         khrSurface.Dispose();
+
         vk.DestroyInstance(instance, null);
 
         vk.Dispose();
