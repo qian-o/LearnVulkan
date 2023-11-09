@@ -125,16 +125,17 @@ public unsafe class MultisamplingApplication : IDisposable
             _vk.UnmapMemory(_device, stagingBufferMemory);
 
             _vk.CreateImage(_physicalDevice,
-                           _device,
-                           (uint)texWidth,
-                           (uint)texHeight,
-                           mipLevels,
-                           format,
-                           ImageTiling.Optimal,
-                           ImageUsageFlags.TransferSrcBit | ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
-                           MemoryPropertyFlags.DeviceLocalBit,
-                           out image,
-                           out imageMemory);
+                            _device,
+                            (uint)texWidth,
+                            (uint)texHeight,
+                            mipLevels,
+                            SampleCountFlags.Count1Bit,
+                            format,
+                            ImageTiling.Optimal,
+                            ImageUsageFlags.TransferSrcBit | ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
+                            MemoryPropertyFlags.DeviceLocalBit,
+                            out image,
+                            out imageMemory);
 
             _vk.TransitionImageLayout(_device,
                                       _commandPool,
@@ -790,6 +791,7 @@ public unsafe class MultisamplingApplication : IDisposable
     private Instance instance;
     private SurfaceKHR surface;
     private PhysicalDevice physicalDevice;
+    private SampleCountFlags msaaSamples = SampleCountFlags.Count1Bit;
     private Device device;
     private Queue graphicsQueue;
     private Queue presentQueue;
@@ -800,6 +802,9 @@ public unsafe class MultisamplingApplication : IDisposable
     private PipelineLayout pipelineLayout;
     private DescriptorSetLayout descriptorSetLayout;
     private Pipeline graphicsPipeline;
+    private VkImage colorImage;
+    private DeviceMemory colorImageMemory;
+    private ImageView colorImageView;
     private VkImage depthImage;
     private DeviceMemory depthImageMemory;
     private ImageView depthImageView;
@@ -870,6 +875,7 @@ public unsafe class MultisamplingApplication : IDisposable
         CreateGraphicsPipeline();
         CreateCommandPool();
         LoadModel();
+        CreateColorResources();
         CreateDepthResources();
         CreateFramebuffers();
         CreateCommandBuffer();
@@ -1135,6 +1141,7 @@ public unsafe class MultisamplingApplication : IDisposable
                 && new SwapChainSupportDetails(khrSurface, device, surface).IsAdequate)
             {
                 physicalDevice = device;
+                msaaSamples = vk.GetMaxUsableSampleCount(device);
                 queueFamilyIndices = temp;
 
                 break;
@@ -1170,7 +1177,10 @@ public unsafe class MultisamplingApplication : IDisposable
             deviceQueueCreateInfos[i] = queueCreateInfo;
         }
 
-        PhysicalDeviceFeatures deviceFeatures = new();
+        PhysicalDeviceFeatures deviceFeatures = new()
+        {
+            SampleRateShading = Vk.True
+        };
 
         DeviceCreateInfo createInfo = new()
         {
@@ -1283,25 +1293,37 @@ public unsafe class MultisamplingApplication : IDisposable
         AttachmentDescription colorAttachment = new()
         {
             Format = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format,
-            Samples = SampleCountFlags.Count1Bit,
+            Samples = msaaSamples,
             LoadOp = AttachmentLoadOp.Clear,
             StoreOp = AttachmentStoreOp.Store,
             StencilLoadOp = AttachmentLoadOp.DontCare,
             StencilStoreOp = AttachmentStoreOp.DontCare,
             InitialLayout = ImageLayout.Undefined,
-            FinalLayout = ImageLayout.PresentSrcKhr
+            FinalLayout = ImageLayout.ColorAttachmentOptimal
         };
 
         AttachmentDescription depthAttachment = new()
         {
             Format = vk.FindDepthFormat(physicalDevice),
-            Samples = SampleCountFlags.Count1Bit,
+            Samples = msaaSamples,
             LoadOp = AttachmentLoadOp.Clear,
             StoreOp = AttachmentStoreOp.DontCare,
             StencilLoadOp = AttachmentLoadOp.DontCare,
             StencilStoreOp = AttachmentStoreOp.DontCare,
             InitialLayout = ImageLayout.Undefined,
             FinalLayout = ImageLayout.DepthStencilAttachmentOptimal
+        };
+
+        AttachmentDescription colorAttachmentResolve = new()
+        {
+            Format = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format,
+            Samples = SampleCountFlags.Count1Bit,
+            LoadOp = AttachmentLoadOp.DontCare,
+            StoreOp = AttachmentStoreOp.Store,
+            StencilLoadOp = AttachmentLoadOp.DontCare,
+            StencilStoreOp = AttachmentStoreOp.DontCare,
+            InitialLayout = ImageLayout.Undefined,
+            FinalLayout = ImageLayout.PresentSrcKhr
         };
 
         AttachmentReference colorAttachmentRef = new()
@@ -1316,12 +1338,19 @@ public unsafe class MultisamplingApplication : IDisposable
             Layout = ImageLayout.DepthStencilAttachmentOptimal
         };
 
+        AttachmentReference colorAttachmentResolveRef = new()
+        {
+            Attachment = 2,
+            Layout = ImageLayout.ColorAttachmentOptimal
+        };
+
         SubpassDescription subpass = new()
         {
             PipelineBindPoint = PipelineBindPoint.Graphics,
             ColorAttachmentCount = 1,
             PColorAttachments = &colorAttachmentRef,
-            PDepthStencilAttachment = &depthAttachmentRef
+            PDepthStencilAttachment = &depthAttachmentRef,
+            PResolveAttachments = &colorAttachmentResolveRef
         };
 
         SubpassDependency dependency = new()
@@ -1337,7 +1366,8 @@ public unsafe class MultisamplingApplication : IDisposable
         AttachmentDescription[] attachments = new AttachmentDescription[]
         {
             colorAttachment,
-            depthAttachment
+            depthAttachment,
+            colorAttachmentResolve
         };
 
         RenderPassCreateInfo renderPassInfo = new()
@@ -1514,8 +1544,9 @@ public unsafe class MultisamplingApplication : IDisposable
         PipelineMultisampleStateCreateInfo multisampling = new()
         {
             SType = StructureType.PipelineMultisampleStateCreateInfo,
-            SampleShadingEnable = Vk.False,
-            RasterizationSamples = SampleCountFlags.Count1Bit
+            SampleShadingEnable = Vk.True,
+            MinSampleShading = 0.2f,
+            RasterizationSamples = msaaSamples
         };
 
         // 深度和模板测试
@@ -1604,8 +1635,9 @@ public unsafe class MultisamplingApplication : IDisposable
         {
             ImageView[] attachments = new ImageView[]
             {
-                swapchainImageViews[i],
-                depthImageView
+                colorImageView,
+                depthImageView,
+                swapchainImageViews[i]
             };
 
             FramebufferCreateInfo framebufferInfo = new()
@@ -1658,6 +1690,30 @@ public unsafe class MultisamplingApplication : IDisposable
     }
 
     /// <summary>
+    /// 创建颜色缓冲。
+    /// </summary>
+    private void CreateColorResources()
+    {
+        Format colorFormat = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format;
+        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+
+        vk.CreateImage(physicalDevice,
+                       device,
+                       extent.Width,
+                       extent.Height,
+                       1,
+                       msaaSamples,
+                       colorFormat,
+                       ImageTiling.Optimal,
+                       ImageUsageFlags.TransientAttachmentBit | ImageUsageFlags.ColorAttachmentBit,
+                       MemoryPropertyFlags.DeviceLocalBit,
+                       out colorImage,
+                       out colorImageMemory);
+
+        colorImageView = vk.CreateImageView(device, colorImage, colorFormat, ImageAspectFlags.ColorBit);
+    }
+
+    /// <summary>
     /// 创建深度缓冲。
     /// </summary>
     private void CreateDepthResources()
@@ -1671,6 +1727,7 @@ public unsafe class MultisamplingApplication : IDisposable
                        extent.Width,
                        extent.Height,
                        1,
+                       msaaSamples,
                        depthFormat,
                        ImageTiling.Optimal,
                        ImageUsageFlags.DepthStencilAttachmentBit,
@@ -1679,14 +1736,6 @@ public unsafe class MultisamplingApplication : IDisposable
                        out depthImageMemory);
 
         depthImageView = vk.CreateImageView(device, depthImage, depthFormat, ImageAspectFlags.DepthBit);
-
-        vk.TransitionImageLayout(device,
-                                 commandPool,
-                                 graphicsQueue,
-                                 depthImage,
-                                 depthFormat,
-                                 ImageLayout.Undefined,
-                                 ImageLayout.DepthStencilAttachmentOptimal);
     }
 
     /// <summary>
@@ -1857,6 +1906,7 @@ public unsafe class MultisamplingApplication : IDisposable
 
         CreateSwapChain();
         CreateImageViews();
+        CreateColorResources();
         CreateDepthResources();
         CreateFramebuffers();
     }
@@ -1866,6 +1916,10 @@ public unsafe class MultisamplingApplication : IDisposable
     /// </summary>
     private void CleanupSwapChain()
     {
+        vk.DestroyImageView(device, colorImageView, null);
+        vk.DestroyImage(device, colorImage, null);
+        vk.FreeMemory(device, colorImageMemory, null);
+
         vk.DestroyImageView(device, depthImageView, null);
         vk.DestroyImage(device, depthImage, null);
         vk.FreeMemory(device, depthImageMemory, null);

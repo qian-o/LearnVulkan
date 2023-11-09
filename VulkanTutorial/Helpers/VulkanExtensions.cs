@@ -78,6 +78,52 @@ public static unsafe class VulkanExtensions
     }
 
     /// <summary>
+    /// 获取最大可用的采样数。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="physicalDevice">physicalDevice</param>
+    /// <returns></returns>
+    public static SampleCountFlags GetMaxUsableSampleCount(this Vk vk, PhysicalDevice physicalDevice)
+    {
+        PhysicalDeviceProperties physicalDeviceProperties;
+        vk.GetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
+
+        SampleCountFlags counts = physicalDeviceProperties.Limits.FramebufferColorSampleCounts & physicalDeviceProperties.Limits.FramebufferDepthSampleCounts;
+
+        if (counts.HasFlag(SampleCountFlags.Count64Bit))
+        {
+            return SampleCountFlags.Count64Bit;
+        }
+
+        if (counts.HasFlag(SampleCountFlags.Count32Bit))
+        {
+            return SampleCountFlags.Count32Bit;
+        }
+
+        if (counts.HasFlag(SampleCountFlags.Count16Bit))
+        {
+            return SampleCountFlags.Count16Bit;
+        }
+
+        if (counts.HasFlag(SampleCountFlags.Count8Bit))
+        {
+            return SampleCountFlags.Count8Bit;
+        }
+
+        if (counts.HasFlag(SampleCountFlags.Count4Bit))
+        {
+            return SampleCountFlags.Count4Bit;
+        }
+
+        if (counts.HasFlag(SampleCountFlags.Count2Bit))
+        {
+            return SampleCountFlags.Count2Bit;
+        }
+
+        return SampleCountFlags.Count1Bit;
+    }
+
+    /// <summary>
     /// 创建着色器模块。
     /// </summary>
     /// <param name="vk">vk</param>
@@ -170,7 +216,7 @@ public static unsafe class VulkanExtensions
     /// <param name="properties">properties</param>
     /// <param name="image">image</param>
     /// <param name="imageMemory">imageMemory</param>
-    public static void CreateImage(this Vk vk, PhysicalDevice physicalDevice, Device device, uint width, uint height, uint mipLevels, Format format, ImageTiling tiling, ImageUsageFlags usage, MemoryPropertyFlags properties, out Image image, out DeviceMemory imageMemory)
+    public static void CreateImage(this Vk vk, PhysicalDevice physicalDevice, Device device, uint width, uint height, uint mipLevels, SampleCountFlags samples, Format format, ImageTiling tiling, ImageUsageFlags usage, MemoryPropertyFlags properties, out Image image, out DeviceMemory imageMemory)
     {
         ImageCreateInfo imageInfo = new()
         {
@@ -184,7 +230,7 @@ public static unsafe class VulkanExtensions
             InitialLayout = ImageLayout.Undefined,
             Usage = usage,
             SharingMode = SharingMode.Exclusive,
-            Samples = SampleCountFlags.Count1Bit
+            Samples = samples
         };
 
         if (vk.CreateImage(device, &imageInfo, null, out image) != Result.Success)
