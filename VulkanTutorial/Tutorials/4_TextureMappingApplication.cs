@@ -841,6 +841,7 @@ public unsafe class TextureMappingApplication : IDisposable
                        device,
                        (uint)texWidth,
                        (uint)texHeight,
+                       1,
                        Format.R8G8B8A8Srgb,
                        ImageTiling.Optimal,
                        ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,

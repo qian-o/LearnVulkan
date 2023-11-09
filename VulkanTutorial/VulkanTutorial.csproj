@@ -126,6 +126,12 @@
 		<None Update="Shaders\DepthBufferingApplication\vert.spv">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
+		<None Update="Shaders\GeneratingMipmapsApplication\frag.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Shaders\GeneratingMipmapsApplication\vert.spv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 		<None Update="Shaders\HelloTriangleApplication\frag.spv">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>

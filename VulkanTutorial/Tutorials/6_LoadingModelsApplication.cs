@@ -123,15 +123,16 @@ public unsafe class LoadingModelsApplication : IDisposable
             _vk.UnmapMemory(_device, stagingBufferMemory);
 
             _vk.CreateImage(_physicalDevice,
-                           _device,
-                           (uint)texWidth,
-                           (uint)texHeight,
-                           format,
-                           ImageTiling.Optimal,
-                           ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
-                           MemoryPropertyFlags.DeviceLocalBit,
-                           out image,
-                           out imageMemory);
+                            _device,
+                            (uint)texWidth,
+                            (uint)texHeight,
+                            1,
+                            format,
+                            ImageTiling.Optimal,
+                            ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
+                            MemoryPropertyFlags.DeviceLocalBit,
+                            out image,
+                            out imageMemory);
 
             _vk.TransitionImageLayout(_device,
                                       _commandPool,
@@ -1664,6 +1665,7 @@ public unsafe class LoadingModelsApplication : IDisposable
                        device,
                        extent.Width,
                        extent.Height,
+                       1,
                        depthFormat,
                        ImageTiling.Optimal,
                        ImageUsageFlags.DepthStencilAttachmentBit,

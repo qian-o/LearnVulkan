@@ -81,6 +81,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
         protected readonly CommandPool _commandPool;
         protected readonly Queue _graphicsQueue;
 
+        protected uint mipLevels;
         protected VkImage image;
         protected DeviceMemory imageMemory;
         protected ImageView imageView;
@@ -108,6 +109,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
             void* texData = GetMappedData(out int texWidth, out int texHeight, out int texChannels, out Format format);
 
             ulong size = (ulong)(texWidth * texHeight * texChannels);
+            mipLevels = (uint)Math.Floor(Math.Log2(Math.Max(texWidth, texHeight))) + 1;
 
             _vk.CreateBuffer(_physicalDevice,
                              _device,
@@ -126,9 +128,10 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                            _device,
                            (uint)texWidth,
                            (uint)texHeight,
+                           mipLevels,
                            format,
                            ImageTiling.Optimal,
-                           ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
+                           ImageUsageFlags.TransferSrcBit | ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit,
                            MemoryPropertyFlags.DeviceLocalBit,
                            out image,
                            out imageMemory);
@@ -139,7 +142,8 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                                       image,
                                       format,
                                       ImageLayout.Undefined,
-                                      ImageLayout.TransferDstOptimal);
+                                      ImageLayout.TransferDstOptimal,
+                                      mipLevels);
 
             _vk.CopyBufferToImage(_device,
                                   _commandPool,
@@ -149,13 +153,15 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                                   (uint)texWidth,
                                   (uint)texHeight);
 
-            _vk.TransitionImageLayout(_device,
-                                      _commandPool,
-                                      _graphicsQueue,
-                                      image,
-                                      format,
-                                      ImageLayout.TransferDstOptimal,
-                                      ImageLayout.ShaderReadOnlyOptimal);
+            _vk.GenerateMipmaps(_physicalDevice,
+                                _device,
+                                _commandPool,
+                                _graphicsQueue,
+                                image,
+                                format,
+                                (uint)texWidth,
+                                (uint)texHeight,
+                                mipLevels);
 
             CreateViewAndSampler(format);
 
@@ -165,7 +171,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
 
         private void CreateViewAndSampler(Format format)
         {
-            imageView = _vk.CreateImageView(_device, image, format, ImageAspectFlags.ColorBit);
+            imageView = _vk.CreateImageView(_device, image, format, ImageAspectFlags.ColorBit, mipLevels);
 
             SamplerCreateInfo samplerInfo = new()
             {
@@ -184,7 +190,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                 MipmapMode = SamplerMipmapMode.Linear,
                 MipLodBias = 0.0f,
                 MinLod = 0.0f,
-                MaxLod = 0.0f
+                MaxLod = mipLevels
             };
 
             if (_vk.CreateSampler(_device, &samplerInfo, null, out sampler) != Result.Success)
@@ -1664,6 +1670,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                        device,
                        extent.Width,
                        extent.Height,
+                       1,
                        depthFormat,
                        ImageTiling.Optimal,
                        ImageUsageFlags.DepthStencilAttachmentBit,

@@ -170,14 +170,14 @@ public static unsafe class VulkanExtensions
     /// <param name="properties">properties</param>
     /// <param name="image">image</param>
     /// <param name="imageMemory">imageMemory</param>
-    public static void CreateImage(this Vk vk, PhysicalDevice physicalDevice, Device device, uint width, uint height, Format format, ImageTiling tiling, ImageUsageFlags usage, MemoryPropertyFlags properties, out Image image, out DeviceMemory imageMemory)
+    public static void CreateImage(this Vk vk, PhysicalDevice physicalDevice, Device device, uint width, uint height, uint mipLevels, Format format, ImageTiling tiling, ImageUsageFlags usage, MemoryPropertyFlags properties, out Image image, out DeviceMemory imageMemory)
     {
         ImageCreateInfo imageInfo = new()
         {
             SType = StructureType.ImageCreateInfo,
             ImageType = ImageType.Type2D,
             Extent = new Extent3D(width, height, 1),
-            MipLevels = 1,
+            MipLevels = mipLevels,
             ArrayLayers = 1,
             Format = format,
             Tiling = tiling,
@@ -268,7 +268,7 @@ public static unsafe class VulkanExtensions
     /// <param name="image">image</param>
     /// <param name="oldLayout">oldLayout</param>
     /// <param name="newLayout">newLayout</param>
-    public static void TransitionImageLayout(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, Image image, Format format, ImageLayout oldLayout, ImageLayout newLayout)
+    public static void TransitionImageLayout(this Vk vk, Device device, CommandPool commandPool, Queue graphicsQueue, Image image, Format format, ImageLayout oldLayout, ImageLayout newLayout, uint mipLevels = 1)
     {
         CommandBuffer commandBuffer = vk.BeginSingleTimeCommands(device, commandPool);
 
@@ -283,7 +283,7 @@ public static unsafe class VulkanExtensions
             SubresourceRange = new ImageSubresourceRange
             {
                 BaseMipLevel = 0,
-                LevelCount = 1,
+                LevelCount = mipLevels,
                 BaseArrayLayer = 0,
                 LayerCount = 1
             },
@@ -442,7 +442,7 @@ public static unsafe class VulkanExtensions
     /// <param name="image">image</param>
     /// <param name="format">format</param>
     /// <returns></returns>
-    public static ImageView CreateImageView(this Vk vk, Device device, Image image, Format format, ImageAspectFlags aspectFlags)
+    public static ImageView CreateImageView(this Vk vk, Device device, Image image, Format format, ImageAspectFlags aspectFlags, uint mipLevels = 1)
     {
         ImageViewCreateInfo viewInfo = new()
         {
@@ -454,7 +454,7 @@ public static unsafe class VulkanExtensions
             {
                 AspectMask = aspectFlags,
                 BaseMipLevel = 0,
-                LevelCount = 1,
+                LevelCount = mipLevels,
                 BaseArrayLayer = 0,
                 LayerCount = 1
             }
@@ -512,8 +512,159 @@ public static unsafe class VulkanExtensions
                                       FormatFeatureFlags.DepthStencilAttachmentBit);
     }
 
+    /// <summary>
+    /// 判断格式是否包含模板组件。
+    /// </summary>
+    /// <param name="format">format</param>
+    /// <returns></returns>
     public static bool HasStencilComponent(this Format format)
     {
         return format == Format.D32SfloatS8Uint || format == Format.D24UnormS8Uint;
+    }
+
+    /// <summary>
+    /// 生成mipmaps。
+    /// </summary>
+    /// <param name="vk">vk</param>
+    /// <param name="physicalDevice">physicalDevice</param>
+    /// <param name="device">device</param>
+    /// <param name="commandPool">commandPool</param>
+    /// <param name="graphicsQueue">graphicsQueue</param>
+    /// <param name="image">image</param>
+    /// <param name="format">format</param>
+    /// <param name="texWidth">texWidth</param>
+    /// <param name="texHeight">texHeight</param>
+    /// <param name="mipLevels">mipLevels</param>
+    public static void GenerateMipmaps(this Vk vk, PhysicalDevice physicalDevice, Device device, CommandPool commandPool, Queue graphicsQueue, Image image, Format format, uint texWidth, uint texHeight, uint mipLevels)
+    {
+        FormatProperties formatProperties;
+        vk.GetPhysicalDeviceFormatProperties(physicalDevice, format, &formatProperties);
+
+        if (!formatProperties.OptimalTilingFeatures.HasFlag(FormatFeatureFlags.SampledImageFilterLinearBit))
+        {
+            throw new Exception("纹理图像不支持线性过滤！");
+        }
+
+        CommandBuffer commandBuffer = vk.BeginSingleTimeCommands(device, commandPool);
+
+        ImageMemoryBarrier barrier = new()
+        {
+            SType = StructureType.ImageMemoryBarrier,
+            Image = image,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            SubresourceRange = new ImageSubresourceRange
+            {
+                AspectMask = ImageAspectFlags.ColorBit,
+                BaseArrayLayer = 0,
+                LayerCount = 1,
+                LevelCount = 1
+            }
+        };
+
+        int mipWidth = (int)texWidth;
+        int mipHeight = (int)texHeight;
+
+        for (int i = 1; i < mipLevels; i++)
+        {
+            barrier.SubresourceRange.BaseMipLevel = (uint)i - 1;
+            barrier.SrcAccessMask = AccessFlags.TransferWriteBit;
+            barrier.DstAccessMask = AccessFlags.TransferReadBit;
+            barrier.OldLayout = ImageLayout.TransferDstOptimal;
+            barrier.NewLayout = ImageLayout.TransferSrcOptimal;
+
+            vk.CmdPipelineBarrier(commandBuffer,
+                                  PipelineStageFlags.TransferBit,
+                                  PipelineStageFlags.TransferBit,
+                                  0,
+                                  0,
+                                  null,
+                                  0,
+                                  null,
+                                  1,
+                                  &barrier);
+
+            ImageBlit blit = new()
+            {
+                SrcOffsets = new ImageBlit.SrcOffsetsBuffer()
+                {
+                    Element0 = new Offset3D(0, 0, 0),
+                    Element1 = new Offset3D(mipWidth, mipHeight, 1)
+                },
+                SrcSubresource = new ImageSubresourceLayers
+                {
+                    AspectMask = ImageAspectFlags.ColorBit,
+                    MipLevel = (uint)i - 1,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1
+                },
+                DstOffsets = new ImageBlit.DstOffsetsBuffer()
+                {
+                    Element0 = new Offset3D(0, 0, 0),
+                    Element1 = new Offset3D(mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1)
+                },
+                DstSubresource = new ImageSubresourceLayers
+                {
+                    AspectMask = ImageAspectFlags.ColorBit,
+                    MipLevel = (uint)i,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1
+                }
+            };
+
+            vk.CmdBlitImage(commandBuffer,
+                            image,
+                            ImageLayout.TransferSrcOptimal,
+                            image,
+                            ImageLayout.TransferDstOptimal,
+                            1,
+                            &blit,
+                            Filter.Linear);
+
+            barrier.SrcAccessMask = AccessFlags.TransferReadBit;
+            barrier.DstAccessMask = AccessFlags.ShaderReadBit;
+            barrier.OldLayout = ImageLayout.TransferSrcOptimal;
+            barrier.NewLayout = ImageLayout.ShaderReadOnlyOptimal;
+
+            vk.CmdPipelineBarrier(commandBuffer,
+                                  PipelineStageFlags.TransferBit,
+                                  PipelineStageFlags.FragmentShaderBit,
+                                  0,
+                                  0,
+                                  null,
+                                  0,
+                                  null,
+                                  1,
+                                  &barrier);
+
+            if (mipWidth > 1)
+            {
+                mipWidth /= 2;
+            }
+
+            if (mipHeight > 1)
+            {
+                mipHeight /= 2;
+            }
+        }
+
+        barrier.SubresourceRange.BaseMipLevel = mipLevels - 1;
+        barrier.SrcAccessMask = AccessFlags.TransferWriteBit;
+        barrier.DstAccessMask = AccessFlags.ShaderReadBit;
+        barrier.OldLayout = ImageLayout.TransferDstOptimal;
+        barrier.NewLayout = ImageLayout.ShaderReadOnlyOptimal;
+
+        vk.CmdPipelineBarrier(commandBuffer,
+                              PipelineStageFlags.TransferBit,
+                              PipelineStageFlags.FragmentShaderBit,
+                              0,
+                              0,
+                              null,
+                              0,
+                              null,
+                              1,
+                              &barrier);
+
+        vk.EndSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
     }
 }
