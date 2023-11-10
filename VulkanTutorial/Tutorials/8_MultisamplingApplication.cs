@@ -727,16 +727,16 @@ public unsafe class MultisamplingApplication : IDisposable
 
             Buffer.MemoryCopy(&ubo, uniformBufferMapped, Marshal.SizeOf<UniformBufferObject>(), Marshal.SizeOf<UniformBufferObject>());
 
-            int index = 0;
+            DescriptorSet* descriptorSet = (DescriptorSet*)Unsafe.AsPointer(ref descriptorSets[0]);
             foreach (Mesh mesh in Meshes)
             {
-                DescriptorSet descriptorSet = descriptorSets[index++];
-
                 _vk.CmdBindVertexBuffers(commandBuffer, 0, 1, mesh.VertexBuffer, 0);
                 _vk.CmdBindIndexBuffer(commandBuffer, mesh.IndexBuffer, 0, IndexType.Uint32);
 
-                _vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1, &descriptorSet, 0, null);
+                _vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1, descriptorSet, 0, null);
                 _vk.CmdDrawIndexed(commandBuffer, mesh.IndexCount, 1, 0, 0, 0);
+
+                descriptorSet++;
             }
         }
 
