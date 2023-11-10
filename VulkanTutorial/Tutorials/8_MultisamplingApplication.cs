@@ -1629,42 +1629,6 @@ public unsafe class MultisamplingApplication : IDisposable
     }
 
     /// <summary>
-    /// 创建帧缓冲。
-    /// </summary>
-    private void CreateFramebuffers()
-    {
-        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
-
-        swapchainFramebuffers = new Framebuffer[swapchainImageViews.Length];
-
-        for (int i = 0; i < swapchainFramebuffers.Length; i++)
-        {
-            ImageView[] attachments = new ImageView[]
-            {
-                colorImageView,
-                depthImageView,
-                swapchainImageViews[i]
-            };
-
-            FramebufferCreateInfo framebufferInfo = new()
-            {
-                SType = StructureType.FramebufferCreateInfo,
-                RenderPass = renderPass,
-                AttachmentCount = (uint)attachments.Length,
-                PAttachments = (ImageView*)Unsafe.AsPointer(ref attachments[0]),
-                Width = extent.Width,
-                Height = extent.Height,
-                Layers = 1
-            };
-
-            if (vk.CreateFramebuffer(device, &framebufferInfo, null, out swapchainFramebuffers[i]) != Result.Success)
-            {
-                throw new Exception("创建帧缓冲失败。");
-            }
-        }
-    }
-
-    /// <summary>
     /// 创建命令池。
     /// </summary>
     private void CreateCommandPool()
@@ -1700,8 +1664,9 @@ public unsafe class MultisamplingApplication : IDisposable
     /// </summary>
     private void CreateColorResources()
     {
-        Format colorFormat = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format;
         Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+
+        Format colorFormat = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format;
 
         vk.CreateImage(physicalDevice,
                        device,
@@ -1745,6 +1710,42 @@ public unsafe class MultisamplingApplication : IDisposable
     }
 
     /// <summary>
+    /// 创建帧缓冲。
+    /// </summary>
+    private void CreateFramebuffers()
+    {
+        Extent2D extent = swapChainSupportDetails.ChooseSwapExtent(window);
+
+        swapchainFramebuffers = new Framebuffer[swapchainImageViews.Length];
+
+        for (int i = 0; i < swapchainFramebuffers.Length; i++)
+        {
+            ImageView[] attachments = new ImageView[]
+            {
+                colorImageView,
+                depthImageView,
+                swapchainImageViews[i]
+            };
+
+            FramebufferCreateInfo framebufferInfo = new()
+            {
+                SType = StructureType.FramebufferCreateInfo,
+                RenderPass = renderPass,
+                AttachmentCount = (uint)attachments.Length,
+                PAttachments = (ImageView*)Unsafe.AsPointer(ref attachments[0]),
+                Width = extent.Width,
+                Height = extent.Height,
+                Layers = 1
+            };
+
+            if (vk.CreateFramebuffer(device, &framebufferInfo, null, out swapchainFramebuffers[i]) != Result.Success)
+            {
+                throw new Exception("创建帧缓冲失败。");
+            }
+        }
+    }
+
+    /// <summary>
     /// 创建命令缓冲。
     /// </summary>
     private void CreateCommandBuffer()
@@ -1762,6 +1763,37 @@ public unsafe class MultisamplingApplication : IDisposable
         if (vk.AllocateCommandBuffers(device, &allocateInfo, (CommandBuffer*)Unsafe.AsPointer(ref commandBuffers[0])) != Result.Success)
         {
             throw new Exception("创建命令缓冲失败。");
+        }
+    }
+
+    /// <summary>
+    /// 创建同步对象。
+    /// </summary>
+    private void CreateSyncObjects()
+    {
+        imageAvailableSemaphores = new VkSemaphore[MaxFramesInFlight];
+        renderFinishedSemaphores = new VkSemaphore[MaxFramesInFlight];
+        inFlightFences = new Fence[MaxFramesInFlight];
+
+        SemaphoreCreateInfo semaphoreInfo = new()
+        {
+            SType = StructureType.SemaphoreCreateInfo
+        };
+
+        FenceCreateInfo fenceInfo = new()
+        {
+            SType = StructureType.FenceCreateInfo,
+            Flags = FenceCreateFlags.SignaledBit
+        };
+
+        for (int i = 0; i < MaxFramesInFlight; i++)
+        {
+            if (vk.CreateSemaphore(device, &semaphoreInfo, null, out imageAvailableSemaphores[i]) != Result.Success
+                || vk.CreateSemaphore(device, &semaphoreInfo, null, out renderFinishedSemaphores[i]) != Result.Success
+                || vk.CreateFence(device, &fenceInfo, null, out inFlightFences[i]) != Result.Success)
+            {
+                throw new Exception("创建同步对象失败。");
+            }
         }
     }
 
@@ -1859,37 +1891,6 @@ public unsafe class MultisamplingApplication : IDisposable
         if (vk.EndCommandBuffer(commandBuffer) != Result.Success)
         {
             throw new Exception("结束记录命令缓冲失败。");
-        }
-    }
-
-    /// <summary>
-    /// 创建同步对象。
-    /// </summary>
-    private void CreateSyncObjects()
-    {
-        imageAvailableSemaphores = new VkSemaphore[MaxFramesInFlight];
-        renderFinishedSemaphores = new VkSemaphore[MaxFramesInFlight];
-        inFlightFences = new Fence[MaxFramesInFlight];
-
-        SemaphoreCreateInfo semaphoreInfo = new()
-        {
-            SType = StructureType.SemaphoreCreateInfo
-        };
-
-        FenceCreateInfo fenceInfo = new()
-        {
-            SType = StructureType.FenceCreateInfo,
-            Flags = FenceCreateFlags.SignaledBit
-        };
-
-        for (int i = 0; i < MaxFramesInFlight; i++)
-        {
-            if (vk.CreateSemaphore(device, &semaphoreInfo, null, out imageAvailableSemaphores[i]) != Result.Success
-                || vk.CreateSemaphore(device, &semaphoreInfo, null, out renderFinishedSemaphores[i]) != Result.Success
-                || vk.CreateFence(device, &fenceInfo, null, out inFlightFences[i]) != Result.Success)
-            {
-                throw new Exception("创建同步对象失败。");
-            }
         }
     }
 
