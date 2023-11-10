@@ -260,7 +260,7 @@ public unsafe class VertexBuffersApplication : IDisposable
         ApplicationInfo appinfo = new()
         {
             SType = StructureType.ApplicationInfo,
-            PApplicationName = Utils.StringToPointer("Hello Triangle"),
+            PApplicationName = Utils.StringToPointer(Utils.SplitCamelCase(GetType().Name)),
             ApplicationVersion = new Version32(1, 0, 0),
             PEngineName = Utils.StringToPointer("No Engine"),
             EngineVersion = new Version32(1, 0, 0),

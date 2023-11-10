@@ -1,12 +1,21 @@
 ﻿using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace VulkanTutorial.Helpers;
 
-public unsafe class Utils
+public unsafe partial class Utils
 {
     public const float Pi = 3.1415927f;
 
     public const float PiOver2 = Pi / 2.0f;
+
+    [GeneratedRegex("([A-Z])", RegexOptions.Compiled)]
+    private static partial Regex CamelCase();
+
+    public static string SplitCamelCase(string str)
+    {
+        return CamelCase().Replace(str, " $1").Trim();
+    }
 
     /// <summary>
     /// 字符串转指针。
