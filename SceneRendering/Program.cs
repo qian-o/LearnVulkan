@@ -1,5 +1,4 @@
-﻿using SceneRendering.Contexts;
-using SceneRendering.Contracts.Scenes;
+﻿using SceneRendering.Contracts.Scenes;
 using SceneRendering.Scenes;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
@@ -18,7 +17,7 @@ internal class Program
 
         IWindow window = Window.Create(options);
 
-        using IScene scene = new Scene1(new VkContext(window));
+        using Scene scene = new Scene1(window);
 
         window.Load += scene.Load;
         window.Update += scene.Update;

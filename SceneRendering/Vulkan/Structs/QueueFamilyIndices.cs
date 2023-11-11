@@ -3,26 +3,30 @@ using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
 using System.Runtime.CompilerServices;
 
-namespace VulkanTutorial.Models;
+namespace SceneRendering.Vulkan.Structs;
 
 public readonly unsafe struct QueueFamilyIndices
 {
-    public uint GraphicsFamily { get; }
+    public readonly uint GraphicsFamily;
 
-    public uint PresentFamily { get; }
+    public readonly uint PresentFamily;
 
     public readonly bool IsComplete => GraphicsFamily != uint.MaxValue && PresentFamily != uint.MaxValue;
 
-    public QueueFamilyIndices(Vk vk, KhrSurface khrSurface, PhysicalDevice device, SurfaceKHR surface)
+    public QueueFamilyIndices(VkContext context, PhysicalDevice physicalDevice)
     {
+        Vk vk = context.Vk;
+        KhrSurface khrSurface = context.KhrSurface;
+        SurfaceKHR surface = context.Surface;
+
         GraphicsFamily = uint.MaxValue;
         PresentFamily = uint.MaxValue;
 
         uint queueFamilyCount = 0;
-        vk.GetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, null);
+        vk.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, null);
 
-        Span<QueueFamilyProperties> queueFamilies = stackalloc QueueFamilyProperties[(int)queueFamilyCount];
-        vk.GetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, (QueueFamilyProperties*)Unsafe.AsPointer(ref queueFamilies[0]));
+        QueueFamilyProperties[] queueFamilies = new QueueFamilyProperties[(int)queueFamilyCount];
+        vk.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, (QueueFamilyProperties*)Unsafe.AsPointer(ref queueFamilies[0]));
 
         for (int i = 0; i < queueFamilies.Length; i++)
         {
@@ -32,7 +36,7 @@ public readonly unsafe struct QueueFamilyIndices
             }
 
             Bool32 presentSupport;
-            khrSurface.GetPhysicalDeviceSurfaceSupport(device, (uint)i, surface, &presentSupport);
+            khrSurface.GetPhysicalDeviceSurfaceSupport(physicalDevice, (uint)i, surface, &presentSupport);
 
             if (presentSupport)
             {

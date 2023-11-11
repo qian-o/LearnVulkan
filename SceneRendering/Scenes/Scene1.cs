@@ -1,38 +1,41 @@
-﻿using SceneRendering.Contexts;
-using SceneRendering.Contracts.Scenes;
+﻿using SceneRendering.Contracts.Scenes;
+using SceneRendering.Vulkan;
 using Silk.NET.Maths;
+using Silk.NET.Windowing;
 
 namespace SceneRendering.Scenes;
 
-public unsafe class Scene1 : IScene
+public unsafe class Scene1 : Scene
 {
-    private VkContext _vkContext;
+    private readonly IWindow _window;
 
-    public Scene1(VkContext vkContext)
+    private VkContext? context;
+
+    public Scene1(IWindow window)
     {
-        _vkContext = vkContext;
+        _window = window;
     }
 
-    public void Load()
+    public override void Load()
     {
-        _vkContext.CreateInstance();
+        context = new VkContext(_window);
     }
 
-    public void Update(double time)
-    {
-    }
-
-    public void Render(double time)
-    {
-    }
-
-    public void Resize(Vector2D<int> size)
+    public override void Update(double time)
     {
     }
 
-    public void Dispose()
+    public override void Render(double time)
     {
-        _vkContext.Dispose();
+    }
+
+    public override void Resize(Vector2D<int> size)
+    {
+    }
+
+    public override void Dispose()
+    {
+        context?.Dispose();
 
         GC.SuppressFinalize(this);
     }
