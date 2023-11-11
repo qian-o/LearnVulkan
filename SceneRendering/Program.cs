@@ -18,7 +18,7 @@ internal class Program
 
         IWindow window = Window.Create(options);
 
-        using IScene scene = new MainScene(new VkContext(window));
+        using IScene scene = new Scene1(new VkContext(window));
 
         window.Load += scene.Load;
         window.Update += scene.Update;

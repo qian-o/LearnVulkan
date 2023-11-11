@@ -4,11 +4,11 @@ using Silk.NET.Maths;
 
 namespace SceneRendering.Scenes;
 
-public unsafe class MainScene : IScene
+public unsafe class Scene1 : IScene
 {
     private VkContext _vkContext;
 
-    public MainScene(VkContext vkContext)
+    public Scene1(VkContext vkContext)
     {
         _vkContext = vkContext;
     }
