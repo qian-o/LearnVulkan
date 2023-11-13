@@ -7,7 +7,7 @@ using Silk.NET.Windowing;
 
 namespace SceneRendering.Vulkan;
 
-public class VkContext : VkEntity
+public unsafe class VkContext : VkEntity
 {
     private readonly VkInstance _vkInstance;
     private readonly VkSurface _vkSurface;
@@ -64,8 +64,25 @@ public class VkContext : VkEntity
     public VkImage[] SwapChainImages => _vkSwapChain.SwapChainImages;
     #endregion
 
+    public uint FindMemoryType(uint typeFilter, MemoryPropertyFlags properties)
+    {
+        PhysicalDeviceMemoryProperties memProperties;
+        Vk.GetPhysicalDeviceMemoryProperties(PhysicalDevice, &memProperties);
+
+        for (uint i = 0; i < memProperties.MemoryTypeCount; i++)
+        {
+            if ((typeFilter & (1 << (int)i)) != 0 && memProperties.MemoryTypes[(int)i].PropertyFlags.HasFlag(properties))
+            {
+                return i;
+            }
+        }
+
+        throw new Exception("无法找到合适的内存类型！");
+    }
+
     protected override void Destroy()
     {
+        _vkSwapChain.Dispose();
         _vkLogicalDevice.Dispose();
         _vkPhysicalDevice.Dispose();
         _vkSurface.Dispose();

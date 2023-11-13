@@ -60,7 +60,17 @@ public unsafe class VkSwapChain : VkContextEntity
 
         Context.KhrSwapchain.GetSwapchainImages(Context.LogicalDevice, Swapchain, &imageCount, null);
 
+        Image[] images = new Image[imageCount];
+        fixed (Image* image = &images[0])
+        {
+            Context.KhrSwapchain.GetSwapchainImages(Context.LogicalDevice, Swapchain, &imageCount, image);
+        }
+
         SwapChainImages = new VkImage[imageCount];
+        for (int i = 0; i < imageCount; i++)
+        {
+            SwapChainImages[i] = new VkImage(Context, 1, surfaceFormat.Format, ImageAspectFlags.ColorBit, images[i]);
+        }
     }
 
     protected override void Destroy()
