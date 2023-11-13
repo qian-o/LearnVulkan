@@ -11,8 +11,6 @@ public readonly unsafe struct QueueFamilyIndices
 
     public readonly uint PresentFamily;
 
-    public readonly bool IsComplete => GraphicsFamily != uint.MaxValue && PresentFamily != uint.MaxValue;
-
     public QueueFamilyIndices(VkContext context, PhysicalDevice physicalDevice)
     {
         Vk vk = context.Vk;
@@ -44,6 +42,8 @@ public readonly unsafe struct QueueFamilyIndices
             }
         }
     }
+
+    public readonly bool IsComplete => GraphicsFamily != uint.MaxValue && PresentFamily != uint.MaxValue;
 
     public readonly uint[] ToArray()
     {

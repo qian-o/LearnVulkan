@@ -13,6 +13,16 @@ public class VkContext : VkEntity
     private readonly VkSurface _vkSurface;
     private readonly VkPhysicalDevice _vkPhysicalDevice;
     private readonly VkLogicalDevice _vkLogicalDevice;
+    private readonly VkSwapChain _vkSwapChain;
+
+    public VkContext(IWindow window) : base(Vk.GetApi(), window)
+    {
+        _vkInstance = new VkInstance(this);
+        _vkSurface = new VkSurface(this);
+        _vkPhysicalDevice = new VkPhysicalDevice(this);
+        _vkLogicalDevice = new VkLogicalDevice(this);
+        _vkSwapChain = new VkSwapChain(this);
+    }
 
     #region VkInstance
     public Instance Instance => _vkInstance.Instance;
@@ -48,13 +58,11 @@ public class VkContext : VkEntity
     public KhrSwapchain KhrSwapchain => _vkLogicalDevice.KhrSwapchain;
     #endregion
 
-    public VkContext(IWindow window) : base(Vk.GetApi(), window)
-    {
-        _vkInstance = new VkInstance(this);
-        _vkSurface = new VkSurface(this);
-        _vkPhysicalDevice = new VkPhysicalDevice(this);
-        _vkLogicalDevice = new VkLogicalDevice(this);
-    }
+    #region VkSwapChain
+    public SwapchainKHR Swapchain => _vkSwapChain.Swapchain;
+
+    public VkImage[] SwapChainImages => _vkSwapChain.SwapChainImages;
+    #endregion
 
     protected override void Destroy()
     {

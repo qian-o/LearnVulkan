@@ -15,8 +15,6 @@ public readonly unsafe struct SwapChainSupportDetails
 
     public readonly PresentModeKHR[] PresentModes;
 
-    public readonly bool IsAdequate => Formats.Length > 0 && PresentModes.Length > 0;
-
     public SwapChainSupportDetails(VkContext context, PhysicalDevice physicalDevice)
     {
         _context = context;
@@ -41,6 +39,8 @@ public readonly unsafe struct SwapChainSupportDetails
         PresentModes = new PresentModeKHR[presentModeCount];
         khrSurface.GetPhysicalDeviceSurfacePresentModes(physicalDevice, surface, &presentModeCount, (PresentModeKHR*)Unsafe.AsPointer(ref PresentModes[0]));
     }
+
+    public readonly bool IsAdequate => Formats.Length > 0 && PresentModes.Length > 0;
 
     /// <summary>
     /// 选择最佳的交换链格式。

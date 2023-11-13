@@ -15,10 +15,10 @@ public abstract class VkContextEntity : VkEntity
         KhrSwapchain.ExtensionName
     };
 
-    public readonly VkContext Context;
-
     protected VkContextEntity(VkContext parent) : base(parent)
     {
         Context = parent;
     }
+
+    public VkContext Context { get; }
 }

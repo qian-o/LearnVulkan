@@ -11,10 +11,6 @@ public abstract class VkEntity : IDisposable
     public const bool EnableValidationLayers = false;
 #endif
 
-    public readonly Vk Vk;
-
-    public readonly IWindow Window;
-
     protected VkEntity(VkEntity entity) : this(entity.Vk, entity.Window)
     {
     }
@@ -24,6 +20,10 @@ public abstract class VkEntity : IDisposable
         Vk = vk;
         Window = window;
     }
+
+    public Vk Vk { get; }
+
+    public IWindow Window { get; }
 
     protected abstract void Destroy();
 
