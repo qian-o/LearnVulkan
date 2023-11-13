@@ -35,6 +35,7 @@ public unsafe class VkContext : VkDestroy
     private readonly VkLogicalDevice _vkLogicalDevice;
     private readonly VkSwapChain _vkSwapChain;
     private readonly VkRenderPass _vkRenderPass;
+    private readonly VkDescriptorSetLayout _vkDescriptorSetLayout;
 
     public VkContext(IWindow window) : base(Vk.GetApi(), window)
     {
@@ -44,6 +45,7 @@ public unsafe class VkContext : VkDestroy
         _vkLogicalDevice = new VkLogicalDevice(this);
         _vkSwapChain = new VkSwapChain(this);
         _vkRenderPass = new VkRenderPass(this);
+        _vkDescriptorSetLayout = new VkDescriptorSetLayout(this);
     }
 
     #region VkInstance
@@ -88,6 +90,10 @@ public unsafe class VkContext : VkDestroy
 
     #region VkRenderPass
     public RenderPass RenderPass => _vkRenderPass.RenderPass;
+    #endregion
+
+    #region VkDescriptorSetLayout
+    public DescriptorSetLayout DescriptorSetLayout => _vkDescriptorSetLayout.DescriptorSetLayout;
     #endregion
 
     /// <summary>
@@ -149,6 +155,7 @@ public unsafe class VkContext : VkDestroy
 
     protected override void Destroy()
     {
+        _vkDescriptorSetLayout.Dispose();
         _vkRenderPass.Dispose();
         _vkSwapChain.Dispose();
         _vkLogicalDevice.Dispose();
