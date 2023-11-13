@@ -8,7 +8,7 @@ using System.Text;
 
 namespace SceneRendering.Vulkan;
 
-public unsafe class VkInstance : VkContextEntity
+public unsafe class VkInstance : VkObject
 {
     public readonly Instance Instance;
 

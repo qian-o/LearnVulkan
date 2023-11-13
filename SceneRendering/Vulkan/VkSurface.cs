@@ -2,7 +2,7 @@
 
 namespace SceneRendering.Vulkan;
 
-public unsafe class VkSurface : VkContextEntity
+public unsafe class VkSurface : VkObject
 {
     public readonly SurfaceKHR Surface;
 

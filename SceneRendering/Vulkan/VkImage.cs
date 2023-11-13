@@ -2,7 +2,7 @@
 
 namespace SceneRendering.Vulkan;
 
-public unsafe class VkImage : VkContextEntity
+public unsafe class VkImage : VkObject
 {
     public readonly uint Width;
 

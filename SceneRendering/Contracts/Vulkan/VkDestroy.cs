@@ -3,7 +3,7 @@ using Silk.NET.Windowing;
 
 namespace SceneRendering.Contracts.Vulkan;
 
-public abstract class VkEntity : IDisposable
+public abstract class VkDestroy : IDisposable
 {
 #if DEBUG
     public const bool EnableValidationLayers = true;
@@ -11,11 +11,11 @@ public abstract class VkEntity : IDisposable
     public const bool EnableValidationLayers = false;
 #endif
 
-    protected VkEntity(VkEntity entity) : this(entity.Vk, entity.Window)
+    protected VkDestroy(VkDestroy entity) : this(entity.Vk, entity.Window)
     {
     }
 
-    protected VkEntity(Vk vk, IWindow window)
+    protected VkDestroy(Vk vk, IWindow window)
     {
         Vk = vk;
         Window = window;

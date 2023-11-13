@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace SceneRendering.Vulkan;
 
-public unsafe class VkSwapChain : VkContextEntity
+public unsafe class VkSwapChain : VkObject
 {
     public readonly SwapchainKHR Swapchain;
 

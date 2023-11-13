@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 
 namespace SceneRendering.Vulkan;
 
-public unsafe class VkLogicalDevice : VkContextEntity
+public unsafe class VkLogicalDevice : VkObject
 {
     public readonly Device LogicalDevice;
 

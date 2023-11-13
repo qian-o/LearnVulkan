@@ -3,7 +3,7 @@ using Silk.NET.Vulkan.Extensions.KHR;
 
 namespace SceneRendering.Vulkan;
 
-public abstract class VkContextEntity : VkEntity
+public abstract class VkObject : VkDestroy
 {
     public static readonly string[] ValidationLayers = new string[]
     {
@@ -15,7 +15,7 @@ public abstract class VkContextEntity : VkEntity
         KhrSwapchain.ExtensionName
     };
 
-    protected VkContextEntity(VkContext parent) : base(parent)
+    protected VkObject(VkContext parent) : base(parent)
     {
         Context = parent;
     }

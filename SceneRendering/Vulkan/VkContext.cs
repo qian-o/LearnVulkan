@@ -7,13 +7,14 @@ using Silk.NET.Windowing;
 
 namespace SceneRendering.Vulkan;
 
-public unsafe class VkContext : VkEntity
+public unsafe class VkContext : VkDestroy
 {
     private readonly VkInstance _vkInstance;
     private readonly VkSurface _vkSurface;
     private readonly VkPhysicalDevice _vkPhysicalDevice;
     private readonly VkLogicalDevice _vkLogicalDevice;
     private readonly VkSwapChain _vkSwapChain;
+    private readonly VkRenderPass _vkRenderPass;
 
     public VkContext(IWindow window) : base(Vk.GetApi(), window)
     {
@@ -22,6 +23,7 @@ public unsafe class VkContext : VkEntity
         _vkPhysicalDevice = new VkPhysicalDevice(this);
         _vkLogicalDevice = new VkLogicalDevice(this);
         _vkSwapChain = new VkSwapChain(this);
+        _vkRenderPass = new VkRenderPass(this);
     }
 
     #region VkInstance
@@ -64,6 +66,16 @@ public unsafe class VkContext : VkEntity
     public VkImage[] SwapChainImages => _vkSwapChain.SwapChainImages;
     #endregion
 
+    #region VkRenderPass
+    public RenderPass RenderPass => _vkRenderPass.RenderPass;
+    #endregion
+
+    /// <summary>
+    /// 查找合适的内存类型。
+    /// </summary>
+    /// <param name="typeFilter">typeFilter</param>
+    /// <param name="properties">properties</param>
+    /// <returns></returns>
     public uint FindMemoryType(uint typeFilter, MemoryPropertyFlags properties)
     {
         PhysicalDeviceMemoryProperties memProperties;
@@ -79,6 +91,41 @@ public unsafe class VkContext : VkEntity
 
         throw new Exception("无法找到合适的内存类型！");
     }
+
+    /// <summary>
+    /// 查找合适的格式。
+    /// </summary>
+    /// <param name="candidates">candidates</param>
+    /// <param name="tiling">tiling</param>
+    /// <param name="features">features</param>
+    /// <returns></returns>
+    public Format FindSupportedFormat(Format[] candidates, ImageTiling tiling, FormatFeatureFlags features)
+    {
+        foreach (Format format in candidates)
+        {
+            FormatProperties props;
+            Vk.GetPhysicalDeviceFormatProperties(PhysicalDevice, format, &props);
+
+            if (tiling == ImageTiling.Linear && props.LinearTilingFeatures.HasFlag(features))
+            {
+                return format;
+            }
+            else if (tiling == ImageTiling.Optimal && props.OptimalTilingFeatures.HasFlag(features))
+            {
+                return format;
+            }
+        }
+
+        throw new Exception("无法找到合适的格式！");
+    }
+
+    /// <summary>
+    /// 查找合适的深度格式。
+    /// </summary>
+    /// <returns></returns>
+    public Format FindDepthFormat() => FindSupportedFormat(new[] { Format.D32Sfloat, Format.D32SfloatS8Uint, Format.D24UnormS8Uint },
+                                                           ImageTiling.Optimal,
+                                                           FormatFeatureFlags.DepthStencilAttachmentBit);
 
     protected override void Destroy()
     {
