@@ -55,7 +55,7 @@ public unsafe class VkImage : VkObject
 
         fixed (ImageView* imageView = &ImageView)
         {
-            if (Vk.CreateImageView(Context.LogicalDevice, &createInfo, null, imageView) != Result.Success)
+            if (Vk.CreateImageView(Context.Device, &createInfo, null, imageView) != Result.Success)
             {
                 throw new Exception("无法创建图像视图！");
             }
@@ -104,7 +104,7 @@ public unsafe class VkImage : VkObject
 
             fixed (Image* image = &Image)
             {
-                if (Vk.CreateImage(Context.LogicalDevice, &createInfo, null, image) != Result.Success)
+                if (Vk.CreateImage(Context.Device, &createInfo, null, image) != Result.Success)
                 {
                     throw new Exception("无法创建图像！");
                 }
@@ -131,7 +131,7 @@ public unsafe class VkImage : VkObject
 
             fixed (ImageView* imageView = &ImageView)
             {
-                if (Vk.CreateImageView(Context.LogicalDevice, &createInfo, null, imageView) != Result.Success)
+                if (Vk.CreateImageView(Context.Device, &createInfo, null, imageView) != Result.Success)
                 {
                     throw new Exception("无法创建图像视图！");
                 }
@@ -141,7 +141,7 @@ public unsafe class VkImage : VkObject
         // 分配内存。
         {
             MemoryRequirements memRequirements;
-            Vk.GetImageMemoryRequirements(Context.LogicalDevice, Image, &memRequirements);
+            Vk.GetImageMemoryRequirements(Context.Device, Image, &memRequirements);
 
             MemoryAllocateInfo allocInfo = new()
             {
@@ -152,24 +152,24 @@ public unsafe class VkImage : VkObject
 
             fixed (DeviceMemory* deviceMemory = &DeviceMemory)
             {
-                if (Vk.AllocateMemory(Context.LogicalDevice, &allocInfo, null, deviceMemory) != Result.Success)
+                if (Vk.AllocateMemory(Context.Device, &allocInfo, null, deviceMemory) != Result.Success)
                 {
                     throw new Exception("无法分配图像内存！");
                 }
             }
 
-            Vk.BindImageMemory(Context.LogicalDevice, Image, DeviceMemory, 0);
+            Vk.BindImageMemory(Context.Device, Image, DeviceMemory, 0);
         }
     }
 
     protected override void Destroy()
     {
-        Vk.DestroyImageView(Context.LogicalDevice, ImageView, null);
+        Vk.DestroyImageView(Context.Device, ImageView, null);
 
         if (DeviceMemory.Handle != 0x00)
         {
-            Vk.DestroyImage(Context.LogicalDevice, Image, null);
-            Vk.FreeMemory(Context.LogicalDevice, DeviceMemory, null);
+            Vk.DestroyImage(Context.Device, Image, null);
+            Vk.FreeMemory(Context.Device, DeviceMemory, null);
         }
     }
 }

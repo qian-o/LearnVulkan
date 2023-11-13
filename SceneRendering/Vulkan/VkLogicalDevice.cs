@@ -7,7 +7,7 @@ namespace SceneRendering.Vulkan;
 
 public unsafe class VkLogicalDevice : VkObject
 {
-    public readonly Device LogicalDevice;
+    public readonly Device Device;
 
     public readonly Queue GraphicsQueue;
 
@@ -57,7 +57,7 @@ public unsafe class VkLogicalDevice : VkObject
         createInfo.EnabledExtensionCount = (uint)DeviceExtensions.Length;
         createInfo.PpEnabledExtensionNames = Utils.GetPointerArray(DeviceExtensions);
 
-        fixed (Device* logicalDevice = &LogicalDevice)
+        fixed (Device* logicalDevice = &Device)
         {
             if (Vk.CreateDevice(Context.PhysicalDevice, &createInfo, null, logicalDevice) != Result.Success)
             {
@@ -67,15 +67,15 @@ public unsafe class VkLogicalDevice : VkObject
 
         fixed (Queue* graphicsQueue = &GraphicsQueue)
         {
-            Vk.GetDeviceQueue(LogicalDevice, Context.QueueFamilyIndices.GraphicsFamily, 0, graphicsQueue);
+            Vk.GetDeviceQueue(Device, Context.QueueFamilyIndices.GraphicsFamily, 0, graphicsQueue);
         }
 
         fixed (Queue* presentQueue = &PresentQueue)
         {
-            Vk.GetDeviceQueue(LogicalDevice, Context.QueueFamilyIndices.PresentFamily, 0, presentQueue);
+            Vk.GetDeviceQueue(Device, Context.QueueFamilyIndices.PresentFamily, 0, presentQueue);
         }
 
-        if (!Vk.TryGetDeviceExtension(Context.Instance, LogicalDevice, out KhrSwapchain))
+        if (!Vk.TryGetDeviceExtension(Context.Instance, Device, out KhrSwapchain))
         {
             throw new Exception("找不到交换链扩展。");
         }
@@ -85,6 +85,6 @@ public unsafe class VkLogicalDevice : VkObject
     {
         KhrSwapchain.Dispose();
 
-        Vk.DestroyDevice(LogicalDevice, null);
+        Vk.DestroyDevice(Device, null);
     }
 }

@@ -52,18 +52,18 @@ public unsafe class VkSwapChain : VkObject
 
         fixed (SwapchainKHR* swapchain = &Swapchain)
         {
-            if (Context.KhrSwapchain.CreateSwapchain(Context.LogicalDevice, &createInfo, null, swapchain) != Result.Success)
+            if (Context.KhrSwapchain.CreateSwapchain(Context.Device, &createInfo, null, swapchain) != Result.Success)
             {
                 throw new Exception("无法创建交换链。");
             }
         }
 
-        Context.KhrSwapchain.GetSwapchainImages(Context.LogicalDevice, Swapchain, &imageCount, null);
+        Context.KhrSwapchain.GetSwapchainImages(Context.Device, Swapchain, &imageCount, null);
 
         Image[] images = new Image[imageCount];
         fixed (Image* image = &images[0])
         {
-            Context.KhrSwapchain.GetSwapchainImages(Context.LogicalDevice, Swapchain, &imageCount, image);
+            Context.KhrSwapchain.GetSwapchainImages(Context.Device, Swapchain, &imageCount, image);
         }
 
         SwapChainImages = new VkImage[imageCount];
@@ -80,6 +80,6 @@ public unsafe class VkSwapChain : VkObject
             image.Dispose();
         }
 
-        Context.KhrSwapchain.DestroySwapchain(Context.LogicalDevice, Swapchain, null);
+        Context.KhrSwapchain.DestroySwapchain(Context.Device, Swapchain, null);
     }
 }

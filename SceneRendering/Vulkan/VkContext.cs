@@ -7,6 +7,26 @@ using Silk.NET.Windowing;
 
 namespace SceneRendering.Vulkan;
 
+public abstract class VkObject : VkDestroy
+{
+    public static readonly string[] ValidationLayers = new string[]
+    {
+        "VK_LAYER_KHRONOS_validation"
+    };
+
+    public static readonly string[] DeviceExtensions = new string[]
+    {
+        KhrSwapchain.ExtensionName
+    };
+
+    protected VkObject(VkContext parent) : base(parent)
+    {
+        Context = parent;
+    }
+
+    public VkContext Context { get; }
+}
+
 public unsafe class VkContext : VkDestroy
 {
     private readonly VkInstance _vkInstance;
@@ -43,7 +63,7 @@ public unsafe class VkContext : VkDestroy
     #region VkPhysicalDevice
     public PhysicalDevice PhysicalDevice => _vkPhysicalDevice.PhysicalDevice;
 
-    public SampleCountFlags SampleCountFlags => _vkPhysicalDevice.SampleCountFlags;
+    public SampleCountFlags MsaaSamples => _vkPhysicalDevice.MsaaSamples;
 
     public QueueFamilyIndices QueueFamilyIndices => _vkPhysicalDevice.GetQueueFamilyIndices();
 
@@ -51,7 +71,7 @@ public unsafe class VkContext : VkDestroy
     #endregion
 
     #region VkLogicalDevice
-    public Device LogicalDevice => _vkLogicalDevice.LogicalDevice;
+    public Device Device => _vkLogicalDevice.Device;
 
     public Queue GraphicsQueue => _vkLogicalDevice.GraphicsQueue;
 
@@ -129,6 +149,7 @@ public unsafe class VkContext : VkDestroy
 
     protected override void Destroy()
     {
+        _vkRenderPass.Dispose();
         _vkSwapChain.Dispose();
         _vkLogicalDevice.Dispose();
         _vkPhysicalDevice.Dispose();

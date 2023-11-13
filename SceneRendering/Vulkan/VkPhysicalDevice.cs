@@ -9,7 +9,7 @@ public unsafe class VkPhysicalDevice : VkObject
 {
     public readonly PhysicalDevice PhysicalDevice;
 
-    public readonly SampleCountFlags SampleCountFlags;
+    public readonly SampleCountFlags MsaaSamples;
 
     public VkPhysicalDevice(VkContext parent) : base(parent)
     {
@@ -31,7 +31,7 @@ public unsafe class VkPhysicalDevice : VkObject
                 && new SwapChainSupportDetails(Context, physicalDevice).IsAdequate)
             {
                 PhysicalDevice = physicalDevice;
-                SampleCountFlags = GetMaxUsableSampleCount(physicalDevice);
+                MsaaSamples = GetMaxUsableSampleCount(physicalDevice);
 
                 break;
             }
