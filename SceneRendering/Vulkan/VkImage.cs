@@ -1,4 +1,5 @@
 ﻿using Silk.NET.Vulkan;
+using Buffer = System.Buffer;
 
 namespace SceneRendering.Vulkan;
 
@@ -160,6 +161,19 @@ public unsafe class VkImage : VkObject
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// 拷贝像素数据。
+    /// </summary>
+    /// <param name="pixels">pixels</param>
+    /// <param name="size">size</param>
+    public void CopyPixels(void* pixels, ulong size)
+    {
+        void* data;
+        Vk.MapMemory(Context.Device, DeviceMemory, 0, size, 0, &data);
+        Buffer.MemoryCopy(pixels, data, size, size);
+        Vk.UnmapMemory(Context.Device, DeviceMemory);
     }
 
     protected override void Destroy()

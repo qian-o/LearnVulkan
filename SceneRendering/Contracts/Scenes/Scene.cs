@@ -22,8 +22,6 @@ public abstract class Scene : IDisposable
         _window.Run();
     }
 
-    public abstract void Dispose();
-
     protected abstract void Load();
 
     protected abstract void Update(double delta);
@@ -31,4 +29,6 @@ public abstract class Scene : IDisposable
     protected abstract void Render(double delta);
 
     protected abstract void FrameBufferResize(Vector2D<int> size);
+
+    public abstract void Dispose();
 }

@@ -35,15 +35,15 @@ public unsafe class Scene1 : Scene
         context!.RecreateSwapChain();
     }
 
+    private void RecordCommandBuffer(Vk vk, CommandBuffer commandBuffer, double delta)
+    {
+
+    }
+
     public override void Dispose()
     {
         context?.Dispose();
 
         GC.SuppressFinalize(this);
-    }
-
-    private void RecordCommandBuffer(Vk vk, CommandBuffer commandBuffer, double delta)
-    {
-
     }
 }
