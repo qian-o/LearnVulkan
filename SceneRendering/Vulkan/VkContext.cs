@@ -157,6 +157,7 @@ public unsafe class VkContext : VkDestroy
 
     protected override void Destroy()
     {
+        _vkGraphicsPipeline.Dispose();
         _vkDescriptorSetLayout.Dispose();
         _vkRenderPass.Dispose();
         _vkSwapChain.Dispose();

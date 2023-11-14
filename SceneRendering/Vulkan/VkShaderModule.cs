@@ -20,7 +20,7 @@ public unsafe class VkShaderModule : VkObject
 
         fixed (ShaderModule* shaderModule = &ShaderModule)
         {
-            if (Vk.CreateShaderModule(parent.Device, &createInfo, null, shaderModule) != Result.Success)
+            if (Vk.CreateShaderModule(Context.Device, &createInfo, null, shaderModule) != Result.Success)
             {
                 throw new Exception("创建着色器模块失败。");
             }
