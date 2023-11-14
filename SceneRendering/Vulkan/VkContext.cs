@@ -246,7 +246,6 @@ public unsafe class VkContext : VkDestroy
         }
 
         Vk.ResetFences(Device, 1, InFlightFences[CurrentFrame]);
-
         Vk.ResetCommandBuffer(CommandBuffers[imageIndex], 0);
 
         BeginRecordCommandBuffer(CommandBuffers[imageIndex], imageIndex);
