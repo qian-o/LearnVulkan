@@ -1,4 +1,5 @@
-﻿using Silk.NET.Vulkan;
+﻿using SceneRendering.Vulkan.Shaders;
+using Silk.NET.Vulkan;
 using System.Runtime.CompilerServices;
 
 namespace SceneRendering.Vulkan;
@@ -9,29 +10,7 @@ public unsafe class VkDescriptorSetLayout : VkObject
 
     public VkDescriptorSetLayout(VkContext parent) : base(parent)
     {
-        DescriptorSetLayoutBinding uboBinding = new()
-        {
-            Binding = 0,
-            DescriptorType = DescriptorType.UniformBuffer,
-            DescriptorCount = 1,
-            StageFlags = ShaderStageFlags.VertexBit,
-            PImmutableSamplers = null
-        };
-
-        DescriptorSetLayoutBinding samplerBinding = new()
-        {
-            Binding = 1,
-            DescriptorType = DescriptorType.CombinedImageSampler,
-            DescriptorCount = 1,
-            StageFlags = ShaderStageFlags.FragmentBit,
-            PImmutableSamplers = null
-        };
-
-        DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
-        {
-            uboBinding,
-            samplerBinding
-        };
+        DescriptorSetLayoutBinding[] bindings = Shader.GetBindings();
 
         DescriptorSetLayoutCreateInfo layoutInfo = new()
         {

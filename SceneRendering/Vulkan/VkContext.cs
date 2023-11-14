@@ -36,6 +36,7 @@ public unsafe class VkContext : VkDestroy
     private readonly VkSwapChain _vkSwapChain;
     private readonly VkRenderPass _vkRenderPass;
     private readonly VkDescriptorSetLayout _vkDescriptorSetLayout;
+    private readonly VkGraphicsPipeline _vkGraphicsPipeline;
 
     public VkContext(IWindow window) : base(Vk.GetApi(), window)
     {
@@ -46,6 +47,7 @@ public unsafe class VkContext : VkDestroy
         _vkSwapChain = new VkSwapChain(this);
         _vkRenderPass = new VkRenderPass(this);
         _vkDescriptorSetLayout = new VkDescriptorSetLayout(this);
+        _vkGraphicsPipeline = new VkGraphicsPipeline(this);
     }
 
     #region VkInstance
