@@ -27,6 +27,23 @@ public abstract class VkObject : VkDestroy
     public VkContext Context { get; }
 }
 
+public abstract class VkReuseObject : VkObject
+{
+    protected VkReuseObject(VkContext parent) : base(parent)
+    {
+        Core();
+    }
+
+    protected abstract void Core();
+
+    public void Reuse()
+    {
+        Destroy();
+
+        Core();
+    }
+}
+
 public unsafe class VkContext : VkDestroy
 {
     private readonly VkInstance _vkInstance;

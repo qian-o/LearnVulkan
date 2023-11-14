@@ -4,13 +4,17 @@ using System.Runtime.CompilerServices;
 
 namespace SceneRendering.Vulkan;
 
-public unsafe class VkSwapChain : VkObject
+public unsafe class VkSwapChain : VkReuseObject
 {
     public readonly SwapchainKHR Swapchain;
 
-    public readonly VkImage[] SwapChainImages;
+    public VkImage[] SwapChainImages = Array.Empty<VkImage>();
 
     public VkSwapChain(VkContext parent) : base(parent)
+    {
+    }
+
+    protected override void Core()
     {
         QueueFamilyIndices queueFamilyIndices = Context.QueueFamilyIndices;
         SwapChainSupportDetails swapChainSupportDetails = Context.SwapChainSupportDetails;
