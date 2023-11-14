@@ -1,5 +1,4 @@
 ﻿using SceneRendering.Contracts.Scenes;
-using SceneRendering.Contracts.Vulkan;
 using SceneRendering.Vulkan;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
@@ -9,43 +8,31 @@ namespace SceneRendering.Scenes;
 
 public unsafe class Scene1 : Scene
 {
-    private readonly IWindow _window;
-
     private VkContext? context;
-    private Vk? vk;
-    private uint currentFrame = 0;
-    private bool framebufferResized = true;
 
-    public Scene1(IWindow window)
+    public Scene1(IWindow window) : base(window)
     {
-        _window = window;
     }
 
-    public override void Load()
+    protected override void Load()
     {
         context = new VkContext(_window);
-        vk = context.Vk;
+        context.RecordCommandBuffer += RecordCommandBuffer;
     }
 
-    public override void Update(double time)
+    protected override void Update(double delta)
     {
+
     }
 
-    public override void Render(double time)
+    protected override void Render(double delta)
     {
-        if (!framebufferResized)
-        {
-            return;
-        }
-
-        currentFrame = (currentFrame + 1) % VkDestroy.MaxFramesInFlight;
+        context!.DrawFrame(delta);
     }
 
-    public override void Resize(Vector2D<int> size)
+    protected override void FrameBufferResize(Vector2D<int> size)
     {
         context!.RecreateSwapChain();
-
-        framebufferResized = true;
     }
 
     public override void Dispose()
@@ -53,5 +40,10 @@ public unsafe class Scene1 : Scene
         context?.Dispose();
 
         GC.SuppressFinalize(this);
+    }
+
+    private void RecordCommandBuffer(Vk vk, CommandBuffer commandBuffer, double delta)
+    {
+
     }
 }

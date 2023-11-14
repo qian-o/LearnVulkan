@@ -910,13 +910,13 @@ public unsafe class MultisamplingApplication : IDisposable
 
         vk.ResetFences(device, 1, inFlightFences[currentFrame]);
 
-        vk.ResetCommandBuffer(commandBuffers[currentFrame], 0);
+        vk.ResetCommandBuffer(commandBuffers[imageIndex], 0);
 
-        RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+        RecordCommandBuffer(commandBuffers[imageIndex], imageIndex);
 
         VkSemaphore[] waitSemaphores = new[] { imageAvailableSemaphores[currentFrame] };
         PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
-        CommandBuffer[] commands = new[] { commandBuffers[currentFrame] };
+        CommandBuffer[] commands = new[] { commandBuffers[imageIndex] };
         VkSemaphore[] signalSemaphores = new[] { renderFinishedSemaphores[currentFrame] };
 
         SubmitInfo submitInfo = new()

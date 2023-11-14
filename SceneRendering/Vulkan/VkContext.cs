@@ -5,6 +5,7 @@ using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
+using System.Runtime.CompilerServices;
 using Semaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace SceneRendering.Vulkan;
@@ -155,6 +156,12 @@ public unsafe class VkContext : VkDestroy
     public Fence[] InFlightFences => _vkSyncObjects.InFlightFences;
     #endregion
 
+    public uint CurrentFrame { get; set; } = 0;
+
+    public bool FramebufferResized { get; set; } = true;
+
+    public event Action<Vk, CommandBuffer, double> RecordCommandBuffer;
+
     /// <summary>
     /// 查找合适的内存类型。
     /// </summary>
@@ -213,6 +220,93 @@ public unsafe class VkContext : VkDestroy
                                                            FormatFeatureFlags.DepthStencilAttachmentBit);
 
     /// <summary>
+    /// 绘制帧。
+    /// </summary>
+    /// <param name="delta">delta</param>
+    public void DrawFrame(double delta)
+    {
+        if (!FramebufferResized)
+        {
+            return;
+        }
+
+        Vk.WaitForFences(Device, 1, InFlightFences[CurrentFrame], Vk.True, ulong.MaxValue);
+
+        uint imageIndex;
+        Result result = KhrSwapchain.AcquireNextImage(Device, Swapchain, ulong.MaxValue, ImageAvailableSemaphores[CurrentFrame], default, &imageIndex);
+        if (result == Result.ErrorOutOfDateKhr)
+        {
+            FramebufferResized = false;
+
+            return;
+        }
+        else if (result != Result.Success && result != Result.SuboptimalKhr)
+        {
+            throw new Exception("获取交换链图像失败。");
+        }
+
+        Vk.ResetFences(Device, 1, InFlightFences[CurrentFrame]);
+
+        Vk.ResetCommandBuffer(CommandBuffers[imageIndex], 0);
+
+        BeginRecordCommandBuffer(CommandBuffers[imageIndex], imageIndex);
+        RecordCommandBuffer?.Invoke(Vk, CommandBuffers[imageIndex], delta);
+        EndRecordCommandBuffer(CommandBuffers[imageIndex]);
+
+        Semaphore[] waitSemaphores = new[] { ImageAvailableSemaphores[CurrentFrame] };
+        PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
+        CommandBuffer[] commands = new[] { CommandBuffers[imageIndex] };
+        Semaphore[] signalSemaphores = new[] { RenderFinishedSemaphores[CurrentFrame] };
+
+        // 提交绘制命令缓冲区。
+        {
+            SubmitInfo submitInfo = new()
+            {
+                SType = StructureType.SubmitInfo,
+                WaitSemaphoreCount = (uint)waitSemaphores.Length,
+                PWaitSemaphores = (Semaphore*)Unsafe.AsPointer(ref waitSemaphores[0]),
+                PWaitDstStageMask = (PipelineStageFlags*)Unsafe.AsPointer(ref waitStages[0]),
+                CommandBufferCount = (uint)commands.Length,
+                PCommandBuffers = (CommandBuffer*)Unsafe.AsPointer(ref commands[0]),
+                SignalSemaphoreCount = (uint)signalSemaphores.Length,
+                PSignalSemaphores = (Semaphore*)Unsafe.AsPointer(ref signalSemaphores[0])
+            };
+
+            if (Vk.QueueSubmit(GraphicsQueue, 1, &submitInfo, InFlightFences[CurrentFrame]) != Result.Success)
+            {
+                throw new Exception("提交绘制命令缓冲区失败。");
+            }
+        }
+
+        // 呈现图像。
+        {
+            SwapchainKHR[] swapChains = new[] { Swapchain };
+
+            PresentInfoKHR presentInfo = new()
+            {
+                SType = StructureType.PresentInfoKhr,
+                WaitSemaphoreCount = (uint)signalSemaphores.Length,
+                PWaitSemaphores = (Semaphore*)Unsafe.AsPointer(ref signalSemaphores[0]),
+                SwapchainCount = (uint)swapChains.Length,
+                PSwapchains = (SwapchainKHR*)Unsafe.AsPointer(ref swapChains[0]),
+                PImageIndices = &imageIndex
+            };
+
+            result = KhrSwapchain.QueuePresent(PresentQueue, &presentInfo);
+            if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
+            {
+                FramebufferResized = false;
+            }
+            else if (result != Result.Success)
+            {
+                throw new Exception("提交呈现命令失败。");
+            }
+        }
+
+        CurrentFrame = (CurrentFrame + 1) % MaxFramesInFlight;
+    }
+
+    /// <summary>
     /// 重置交换链。
     /// </summary>
     public void RecreateSwapChain()
@@ -247,5 +341,106 @@ public unsafe class VkContext : VkDestroy
         _vkPhysicalDevice.Dispose();
         _vkSurface.Dispose();
         _vkInstance.Dispose();
+    }
+
+    /// <summary>
+    /// 开始记录命令缓冲。
+    /// </summary>
+    /// <param name="commandBuffer">commandBuffer</param>
+    /// <param name="imageIndex">imageIndex</param>
+    private void BeginRecordCommandBuffer(CommandBuffer commandBuffer, uint imageIndex)
+    {
+        Extent2D extent = SwapChainSupportDetails.ChooseSwapExtent();
+
+        CommandBufferBeginInfo beginInfo = new()
+        {
+            SType = StructureType.CommandBufferBeginInfo
+        };
+
+        if (Vk.BeginCommandBuffer(commandBuffer, &beginInfo) != Result.Success)
+        {
+            throw new Exception("开始记录命令缓冲失败。");
+        }
+
+        RenderPassBeginInfo renderPassBeginInfo = new()
+        {
+            SType = StructureType.RenderPassBeginInfo,
+            RenderPass = RenderPass,
+            Framebuffer = FrameBuffers[imageIndex],
+            RenderArea = new Rect2D
+            {
+                Offset = new Offset2D
+                {
+                    X = 0,
+                    Y = 0
+                },
+                Extent = extent
+            }
+        };
+
+        ClearValue[] clearValues = new[]
+        {
+            new ClearValue()
+            {
+                Color = new ClearColorValue
+                {
+                    Float32_0 = 0.0f,
+                    Float32_1 = 0.0f,
+                    Float32_2 = 0.0f,
+                    Float32_3 = 1.0f
+                }
+            },
+            new ClearValue()
+            {
+                DepthStencil = new ClearDepthStencilValue
+                {
+                    Depth = 1.0f,
+                    Stencil = 0
+                }
+            }
+        };
+
+        renderPassBeginInfo.ClearValueCount = (uint)clearValues.Length;
+        renderPassBeginInfo.PClearValues = (ClearValue*)Unsafe.AsPointer(ref clearValues[0]);
+
+        Vk.CmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, SubpassContents.Inline);
+
+        Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, Pipeline);
+
+        Viewport viewport = new()
+        {
+            X = 0.0f,
+            Y = 0.0f,
+            Width = extent.Width,
+            Height = extent.Height,
+            MinDepth = 0.0f,
+            MaxDepth = 1.0f
+        };
+        Vk.CmdSetViewport(commandBuffer, 0, 1, viewport);
+
+        Rect2D scissor = new()
+        {
+            Offset = new Offset2D
+            {
+                X = 0,
+                Y = 0
+            },
+            Extent = extent
+        };
+        Vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
+    }
+
+    /// <summary>
+    /// 结束记录命令缓冲。
+    /// </summary>
+    /// <param name="commandBuffer">commandBuffer</param>
+    private void EndRecordCommandBuffer(CommandBuffer commandBuffer)
+    {
+        Vk.CmdEndRenderPass(commandBuffer);
+
+        if (Vk.EndCommandBuffer(commandBuffer) != Result.Success)
+        {
+            throw new Exception("结束记录命令缓冲失败。");
+        }
     }
 }

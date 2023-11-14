@@ -19,11 +19,6 @@ internal class Program
 
         using Scene scene = new Scene1(window);
 
-        window.Load += scene.Load;
-        window.Update += scene.Update;
-        window.Render += scene.Render;
-        window.FramebufferResize += scene.Resize;
-
-        window.Run();
+        scene.Run();
     }
 }

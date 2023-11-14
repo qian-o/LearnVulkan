@@ -1,16 +1,34 @@
 ﻿using Silk.NET.Maths;
+using Silk.NET.Windowing;
 
 namespace SceneRendering.Contracts.Scenes;
 
 public abstract class Scene : IDisposable
 {
-    public abstract void Load();
+    protected readonly IWindow _window;
 
-    public abstract void Update(double time);
+    protected Scene(IWindow window)
+    {
+        _window = window;
 
-    public abstract void Render(double time);
+        _window.Load += Load;
+        _window.Update += Update;
+        _window.Render += Render;
+        _window.FramebufferResize += FrameBufferResize;
+    }
 
-    public abstract void Resize(Vector2D<int> size);
+    public void Run()
+    {
+        _window.Run();
+    }
 
     public abstract void Dispose();
+
+    protected abstract void Load();
+
+    protected abstract void Update(double delta);
+
+    protected abstract void Render(double delta);
+
+    protected abstract void FrameBufferResize(Vector2D<int> size);
 }
