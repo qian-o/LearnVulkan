@@ -1,4 +1,5 @@
-﻿using Silk.NET.Vulkan;
+﻿using Silk.NET.Maths;
+using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 
 namespace SceneRendering.Contracts.Vulkan;
@@ -26,6 +27,8 @@ public abstract class VkDestroy : IDisposable
     public Vk Vk { get; }
 
     public IWindow Window { get; }
+
+    public Vector2D<int> FramebufferSize => Window.FramebufferSize;
 
     protected abstract void Destroy();
 

@@ -10,7 +10,7 @@ public unsafe class VkFrameBuffers : VkReuseObject
 
     public VkImage DepthImage = null!;
 
-    public Framebuffer[] Framebuffers = Array.Empty<Framebuffer>();
+    public Framebuffer[] FrameBuffers = Array.Empty<Framebuffer>();
 
     public VkFrameBuffers(VkContext parent) : base(parent)
     {
@@ -30,28 +30,28 @@ public unsafe class VkFrameBuffers : VkReuseObject
                                  extent.Height,
                                  1,
                                  Context.MsaaSamples,
-                                 ImageLayout.Undefined,
+                                 MemoryPropertyFlags.DeviceLocalBit,
                                  colorFormat,
+                                 ImageLayout.Undefined,
                                  ImageTiling.Optimal,
                                  ImageUsageFlags.TransientAttachmentBit | ImageUsageFlags.ColorAttachmentBit,
-                                 ImageAspectFlags.ColorBit,
-                                 MemoryPropertyFlags.DeviceLocalBit);
+                                 ImageAspectFlags.ColorBit);
 
         DepthImage = new VkImage(Context,
                                  extent.Width,
                                  extent.Height,
                                  1,
                                  Context.MsaaSamples,
-                                 ImageLayout.Undefined,
+                                 MemoryPropertyFlags.DeviceLocalBit,
                                  depthFormat,
+                                 ImageLayout.Undefined,
                                  ImageTiling.Optimal,
                                  ImageUsageFlags.DepthStencilAttachmentBit,
-                                 ImageAspectFlags.DepthBit,
-                                 MemoryPropertyFlags.DeviceLocalBit);
+                                 ImageAspectFlags.DepthBit);
 
-        Framebuffers = new Framebuffer[Context.SwapChainImages.Length];
+        FrameBuffers = new Framebuffer[Context.SwapChainImages.Length];
 
-        for (int i = 0; i < Framebuffers.Length; i++)
+        for (int i = 0; i < FrameBuffers.Length; i++)
         {
             ImageView[] attachments = new ImageView[]
             {
@@ -71,7 +71,7 @@ public unsafe class VkFrameBuffers : VkReuseObject
                 Layers = 1
             };
 
-            fixed (Framebuffer* framebuffer = &Framebuffers[i])
+            fixed (Framebuffer* framebuffer = &FrameBuffers[i])
             {
                 if (Vk.CreateFramebuffer(Context.Device, &createInfo, null, framebuffer) != Result.Success)
                 {
@@ -83,7 +83,7 @@ public unsafe class VkFrameBuffers : VkReuseObject
 
     protected override void Destroy()
     {
-        foreach (Framebuffer framebuffer in Framebuffers)
+        foreach (Framebuffer framebuffer in FrameBuffers)
         {
             Vk.DestroyFramebuffer(Context.Device, framebuffer, null);
         }

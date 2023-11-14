@@ -1,9 +1,11 @@
 ﻿using SceneRendering.Contracts.Vulkan;
 using SceneRendering.Vulkan.Structs;
+using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
+using Semaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace SceneRendering.Vulkan;
 
@@ -57,6 +59,7 @@ public unsafe class VkContext : VkDestroy
     private readonly VkGraphicsPipeline _vkGraphicsPipeline;
     private readonly VkFrameBuffers _vkFrameBuffers;
     private readonly VkCommandBuffers _vkCommandBuffers;
+    private readonly VkSyncObjects _vkSyncObjects;
 
     public VkContext(IWindow window) : base(Vk.GetApi(), window)
     {
@@ -71,6 +74,7 @@ public unsafe class VkContext : VkDestroy
         _vkGraphicsPipeline = new VkGraphicsPipeline(this);
         _vkFrameBuffers = new VkFrameBuffers(this);
         _vkCommandBuffers = new VkCommandBuffers(this);
+        _vkSyncObjects = new VkSyncObjects(this);
     }
 
     #region VkInstance
@@ -136,11 +140,19 @@ public unsafe class VkContext : VkDestroy
 
     public VkImage DepthImage => _vkFrameBuffers.DepthImage;
 
-    public Framebuffer[] Framebuffers => _vkFrameBuffers.Framebuffers;
+    public Framebuffer[] FrameBuffers => _vkFrameBuffers.FrameBuffers;
     #endregion
 
     #region VkCommandBuffers
     public CommandBuffer[] CommandBuffers => _vkCommandBuffers.CommandBuffers;
+    #endregion
+
+    #region VkSyncObjects
+    public Semaphore[] ImageAvailableSemaphores => _vkSyncObjects.ImageAvailableSemaphores;
+
+    public Semaphore[] RenderFinishedSemaphores => _vkSyncObjects.RenderFinishedSemaphores;
+
+    public Fence[] InFlightFences => _vkSyncObjects.InFlightFences;
     #endregion
 
     /// <summary>
@@ -200,8 +212,32 @@ public unsafe class VkContext : VkDestroy
                                                            ImageTiling.Optimal,
                                                            FormatFeatureFlags.DepthStencilAttachmentBit);
 
+    /// <summary>
+    /// 重置交换链。
+    /// </summary>
+    public void RecreateSwapChain()
+    {
+        Vector2D<int> size = FramebufferSize;
+        while (size.X == 0 || size.Y == 0)
+        {
+            size = FramebufferSize;
+
+            Window.DoEvents();
+        }
+
+        Vk.DeviceWaitIdle(Device);
+
+        _vkSwapChain.Reuse();
+        _vkFrameBuffers.Reuse();
+    }
+
     protected override void Destroy()
     {
+        Vk.DeviceWaitIdle(Device);
+
+        _vkSyncObjects.Dispose();
+        _vkCommandBuffers.Dispose();
+        _vkFrameBuffers.Dispose();
         _vkGraphicsPipeline.Dispose();
         _vkDescriptorSetLayout.Dispose();
         _vkRenderPass.Dispose();

@@ -12,9 +12,11 @@ public unsafe class VkImage : VkObject
 
     public readonly SampleCountFlags Samples;
 
-    public readonly ImageLayout Layout;
+    public readonly MemoryPropertyFlags Properties;
 
     public readonly Format Format;
+
+    public readonly ImageLayout Layout;
 
     public readonly ImageTiling Tiling;
 
@@ -22,13 +24,11 @@ public unsafe class VkImage : VkObject
 
     public readonly ImageAspectFlags Aspect;
 
-    public readonly MemoryPropertyFlags Properties;
-
     public readonly Image Image;
 
-    public readonly ImageView ImageView;
-
     public readonly DeviceMemory DeviceMemory;
+
+    public readonly ImageView ImageView;
 
     public VkImage(VkContext parent, uint mipLevels, Format format, ImageAspectFlags aspect, Image image) : base(parent)
     {
@@ -67,23 +67,23 @@ public unsafe class VkImage : VkObject
                    uint height,
                    uint mipLevels,
                    SampleCountFlags samples,
-                   ImageLayout layout,
+                   MemoryPropertyFlags properties,
                    Format format,
+                   ImageLayout layout,
                    ImageTiling tiling,
                    ImageUsageFlags usage,
-                   ImageAspectFlags aspect,
-                   MemoryPropertyFlags properties) : base(parent)
+                   ImageAspectFlags aspect) : base(parent)
     {
         Width = width;
         Height = height;
         MipLevels = mipLevels;
         Samples = samples;
-        Layout = layout;
+        Properties = properties;
         Format = format;
+        Layout = layout;
         Tiling = tiling;
         Usage = usage;
         Aspect = aspect;
-        Properties = properties;
 
         // 创建图像。
         {
@@ -109,6 +109,29 @@ public unsafe class VkImage : VkObject
                     throw new Exception("无法创建图像！");
                 }
             }
+        }
+
+        // 分配内存。
+        {
+            MemoryRequirements memRequirements;
+            Vk.GetImageMemoryRequirements(Context.Device, Image, &memRequirements);
+
+            MemoryAllocateInfo allocInfo = new()
+            {
+                SType = StructureType.MemoryAllocateInfo,
+                AllocationSize = memRequirements.Size,
+                MemoryTypeIndex = Context.FindMemoryType(memRequirements.MemoryTypeBits, Properties)
+            };
+
+            fixed (DeviceMemory* deviceMemory = &DeviceMemory)
+            {
+                if (Vk.AllocateMemory(Context.Device, &allocInfo, null, deviceMemory) != Result.Success)
+                {
+                    throw new Exception("无法分配图像内存！");
+                }
+            }
+
+            Vk.BindImageMemory(Context.Device, Image, DeviceMemory, 0);
         }
 
         // 创建图像视图。
@@ -137,29 +160,6 @@ public unsafe class VkImage : VkObject
                 }
             }
         }
-
-        // 分配内存。
-        {
-            MemoryRequirements memRequirements;
-            Vk.GetImageMemoryRequirements(Context.Device, Image, &memRequirements);
-
-            MemoryAllocateInfo allocInfo = new()
-            {
-                SType = StructureType.MemoryAllocateInfo,
-                AllocationSize = memRequirements.Size,
-                MemoryTypeIndex = Context.FindMemoryType(memRequirements.MemoryTypeBits, Properties)
-            };
-
-            fixed (DeviceMemory* deviceMemory = &DeviceMemory)
-            {
-                if (Vk.AllocateMemory(Context.Device, &allocInfo, null, deviceMemory) != Result.Success)
-                {
-                    throw new Exception("无法分配图像内存！");
-                }
-            }
-
-            Vk.BindImageMemory(Context.Device, Image, DeviceMemory, 0);
-        }
     }
 
     protected override void Destroy()
@@ -168,8 +168,9 @@ public unsafe class VkImage : VkObject
 
         if (DeviceMemory.Handle != 0x00)
         {
-            Vk.DestroyImage(Context.Device, Image, null);
             Vk.FreeMemory(Context.Device, DeviceMemory, null);
+
+            Vk.DestroyImage(Context.Device, Image, null);
         }
     }
 }
