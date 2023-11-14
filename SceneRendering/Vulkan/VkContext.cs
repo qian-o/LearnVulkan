@@ -50,10 +50,13 @@ public unsafe class VkContext : VkDestroy
     private readonly VkSurface _vkSurface;
     private readonly VkPhysicalDevice _vkPhysicalDevice;
     private readonly VkLogicalDevice _vkLogicalDevice;
+    private readonly VkCommandPool _vkCommandPool;
     private readonly VkSwapChain _vkSwapChain;
     private readonly VkRenderPass _vkRenderPass;
     private readonly VkDescriptorSetLayout _vkDescriptorSetLayout;
     private readonly VkGraphicsPipeline _vkGraphicsPipeline;
+    private readonly VkFrameBuffers _vkFrameBuffers;
+    private readonly VkCommandBuffers _vkCommandBuffers;
 
     public VkContext(IWindow window) : base(Vk.GetApi(), window)
     {
@@ -61,10 +64,13 @@ public unsafe class VkContext : VkDestroy
         _vkSurface = new VkSurface(this);
         _vkPhysicalDevice = new VkPhysicalDevice(this);
         _vkLogicalDevice = new VkLogicalDevice(this);
+        _vkCommandPool = new VkCommandPool(this);
         _vkSwapChain = new VkSwapChain(this);
         _vkRenderPass = new VkRenderPass(this);
         _vkDescriptorSetLayout = new VkDescriptorSetLayout(this);
         _vkGraphicsPipeline = new VkGraphicsPipeline(this);
+        _vkFrameBuffers = new VkFrameBuffers(this);
+        _vkCommandBuffers = new VkCommandBuffers(this);
     }
 
     #region VkInstance
@@ -101,6 +107,10 @@ public unsafe class VkContext : VkDestroy
     public KhrSwapchain KhrSwapchain => _vkLogicalDevice.KhrSwapchain;
     #endregion
 
+    #region VkCommandPool
+    public CommandPool CommandPool => _vkCommandPool.CommandPool;
+    #endregion
+
     #region VkSwapChain
     public SwapchainKHR Swapchain => _vkSwapChain.Swapchain;
 
@@ -113,6 +123,24 @@ public unsafe class VkContext : VkDestroy
 
     #region VkDescriptorSetLayout
     public DescriptorSetLayout DescriptorSetLayout => _vkDescriptorSetLayout.DescriptorSetLayout;
+    #endregion
+
+    #region VkGraphicsPipeline
+    public PipelineLayout PipelineLayout => _vkGraphicsPipeline.PipelineLayout;
+
+    public Pipeline Pipeline => _vkGraphicsPipeline.Pipeline;
+    #endregion
+
+    #region VkFramebuffers
+    public VkImage ColorImage => _vkFrameBuffers.ColorImage;
+
+    public VkImage DepthImage => _vkFrameBuffers.DepthImage;
+
+    public Framebuffer[] Framebuffers => _vkFrameBuffers.Framebuffers;
+    #endregion
+
+    #region VkCommandBuffers
+    public CommandBuffer[] CommandBuffers => _vkCommandBuffers.CommandBuffers;
     #endregion
 
     /// <summary>
@@ -178,6 +206,7 @@ public unsafe class VkContext : VkDestroy
         _vkDescriptorSetLayout.Dispose();
         _vkRenderPass.Dispose();
         _vkSwapChain.Dispose();
+        _vkCommandPool.Dispose();
         _vkLogicalDevice.Dispose();
         _vkPhysicalDevice.Dispose();
         _vkSurface.Dispose();

@@ -10,7 +10,7 @@ public unsafe class VkGraphicsPipeline : VkObject
 {
     public readonly PipelineLayout PipelineLayout;
 
-    public readonly Pipeline GraphicsPipeline;
+    public readonly Pipeline Pipeline;
 
     public VkGraphicsPipeline(VkContext parent) : base(parent)
     {
@@ -204,7 +204,7 @@ public unsafe class VkGraphicsPipeline : VkObject
             BasePipelineIndex = -1
         };
 
-        fixed (Pipeline* graphicsPipeline = &GraphicsPipeline)
+        fixed (Pipeline* graphicsPipeline = &Pipeline)
         {
             if (Vk.CreateGraphicsPipelines(Context.Device, default, 1, &pipelineInfo, null, graphicsPipeline) != Result.Success)
             {
@@ -215,7 +215,7 @@ public unsafe class VkGraphicsPipeline : VkObject
 
     protected override void Destroy()
     {
-        Vk.DestroyPipeline(Context.Device, GraphicsPipeline, null);
+        Vk.DestroyPipeline(Context.Device, Pipeline, null);
         Vk.DestroyPipelineLayout(Context.Device, PipelineLayout, null);
     }
 }

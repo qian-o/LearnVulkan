@@ -11,6 +11,8 @@ public abstract class VkDestroy : IDisposable
     public const bool EnableValidationLayers = false;
 #endif
 
+    public const int MaxFramesInFlight = 2;
+
     protected VkDestroy(VkDestroy entity) : this(entity.Vk, entity.Window)
     {
     }
