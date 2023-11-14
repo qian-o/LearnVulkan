@@ -62,6 +62,8 @@ public unsafe class VkContext : VkDestroy
     private readonly VkCommandBuffers _vkCommandBuffers;
     private readonly VkSyncObjects _vkSyncObjects;
 
+    public event Action<Vk, CommandBuffer, double>? RecordCommandBuffer;
+
     public VkContext(IWindow window) : base(Vk.GetApi(), window)
     {
         _vkInstance = new VkInstance(this);
@@ -159,8 +161,6 @@ public unsafe class VkContext : VkDestroy
     public uint CurrentFrame { get; set; } = 0;
 
     public bool FramebufferResized { get; set; } = true;
-
-    public event Action<Vk, CommandBuffer, double> RecordCommandBuffer;
 
     /// <summary>
     /// 查找合适的内存类型。
