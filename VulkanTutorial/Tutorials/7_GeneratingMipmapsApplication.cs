@@ -46,8 +46,8 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
 
         public static VertexInputAttributeDescription[] GetAttributeDescriptions()
         {
-            return new[]
-            {
+            return
+            [
                 new VertexInputAttributeDescription
                 {
                     Binding = 0,
@@ -69,17 +69,17 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                     Format = Format.R32G32Sfloat,
                     Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(TexCoord))
                 }
-            };
+            ];
         }
     }
 
-    public abstract class Tex : IDisposable
+    public abstract class Tex(Vk vk, PhysicalDevice physicalDevice, Device device, CommandPool commandPool, Queue graphicsQueue) : IDisposable
     {
-        protected readonly Vk _vk;
-        protected readonly PhysicalDevice _physicalDevice;
-        protected readonly Device _device;
-        protected readonly CommandPool _commandPool;
-        protected readonly Queue _graphicsQueue;
+        protected readonly Vk _vk = vk;
+        protected readonly PhysicalDevice _physicalDevice = physicalDevice;
+        protected readonly Device _device = device;
+        protected readonly CommandPool _commandPool = commandPool;
+        protected readonly Queue _graphicsQueue = graphicsQueue;
 
         protected uint mipLevels;
         protected VkImage image;
@@ -92,15 +92,6 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
         public ImageView ImageView => imageView;
 
         public Sampler Sampler => sampler;
-
-        public Tex(Vk vk, PhysicalDevice physicalDevice, Device device, CommandPool commandPool, Queue graphicsQueue)
-        {
-            _vk = vk;
-            _physicalDevice = physicalDevice;
-            _device = device;
-            _commandPool = commandPool;
-            _graphicsQueue = graphicsQueue;
-        }
 
         public abstract void* GetMappedData(out int texWidth, out int texHeight, out int texChannels, out Format format);
 
@@ -264,12 +255,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
             texChannels = 4;
             format = Format.R8G8B8A8Srgb;
 
-            byte[] bytes = new byte[4];
-            bytes[0] = _color.R;
-            bytes[1] = _color.G;
-            bytes[2] = _color.B;
-            bytes[3] = _color.A;
-
+            byte[] bytes = [_color.R, _color.G, _color.B, _color.A];
             return Unsafe.AsPointer(ref bytes[0]);
         }
     }
@@ -318,7 +304,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
 
     public class Mesh : IDisposable
     {
-        private static readonly Dictionary<string, Tex> Cache = new();
+        private static readonly Dictionary<string, Tex> Cache = [];
 
         private readonly Vk _vk;
         private readonly PhysicalDevice _physicalDevice;
@@ -361,7 +347,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
         private (Tex Diffuse, Tex Specular) ParsingMesh(string directory, Assimp assimp, Scene* scene, AiMesh* mesh)
         {
             Vertex[] vertices = new Vertex[mesh->MNumVertices];
-            List<uint> indices = new();
+            List<uint> indices = [];
             Tex? diffuse = null;
             Tex? specular = null;
 
@@ -406,7 +392,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                 }
             }
 
-            diffuse ??= new LinearColorTex(_vk, _physicalDevice, _device, _commandPool, _graphicsQueue, new Color[] { Color.Blue, Color.Red }, new PointF(0.0f, 0.0f), new PointF(1.0f, 1.0f));
+            diffuse ??= new LinearColorTex(_vk, _physicalDevice, _device, _commandPool, _graphicsQueue, [Color.Blue, Color.Red], new PointF(0.0f, 0.0f), new PointF(1.0f, 1.0f));
 
             specular ??= new SolidColorTex(_vk, _physicalDevice, _device, _commandPool, _graphicsQueue, Color.Black);
 
@@ -414,14 +400,14 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
             indexCount = (uint)indices.Count;
 
             CreateVertexBuffer(vertices);
-            CreateIndexBuffer(indices.ToArray());
+            CreateIndexBuffer([.. indices]);
 
             return (diffuse, specular);
         }
 
         private List<ImageTex> LoadMaterialTextures(string directory, Assimp assimp, Material* mat, TextureType type)
         {
-            List<ImageTex> materialTextures = new();
+            List<ImageTex> materialTextures = [];
 
             uint textureCount = assimp.GetMaterialTextureCount(mat, type);
             for (uint i = 0; i < textureCount; i++)
@@ -575,11 +561,11 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                 throw new Exception("加载模型失败。");
             }
 
-            List<Mesh> meshes = new();
+            List<Mesh> meshes = [];
 
             ProcessNode(scene->MRootNode, scene, meshes);
 
-            return meshes.ToArray();
+            return [.. meshes];
 
             void ProcessNode(Node* node, Scene* scene, List<Mesh> meshes)
             {
@@ -620,8 +606,8 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
         /// </summary>
         private void CreateDescriptorPool()
         {
-            DescriptorPoolSize[] poolSizes = new DescriptorPoolSize[]
-            {
+            DescriptorPoolSize[] poolSizes =
+            [
                 new DescriptorPoolSize
                 {
                     Type = DescriptorType.UniformBuffer,
@@ -632,7 +618,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                     Type = DescriptorType.CombinedImageSampler,
                     DescriptorCount = (uint)Meshes.Length
                 }
-            };
+            ];
 
             DescriptorPoolCreateInfo poolInfo = new()
             {
@@ -687,8 +673,8 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                     ImageLayout = ImageLayout.ShaderReadOnlyOptimal
                 };
 
-                WriteDescriptorSet[] descriptorWrites = new[]
-                {
+                WriteDescriptorSet[] descriptorWrites =
+                [
                     new WriteDescriptorSet
                     {
                         SType = StructureType.WriteDescriptorSet,
@@ -709,7 +695,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                         DescriptorCount = 1,
                         PImageInfo = &imageInfo
                     }
-                };
+                ];
 
                 _vk.UpdateDescriptorSets(_device, (uint)descriptorWrites.Length, (WriteDescriptorSet*)Unsafe.AsPointer(ref descriptorWrites[0]), 0, null);
             }
@@ -762,15 +748,15 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
     private const float CameraSpeed = 4.0f;
     private const float CameraSensitivity = 0.2f;
 
-    private static readonly string[] ValidationLayers = new string[]
-    {
+    private static readonly string[] ValidationLayers =
+    [
         "VK_LAYER_KHRONOS_validation"
-    };
+    ];
 
-    private static readonly string[] DeviceExtensions = new string[]
-    {
+    private static readonly string[] DeviceExtensions =
+    [
         "VK_KHR_swapchain"
-    };
+    ];
 
     private IWindow window = null!;
 
@@ -909,10 +895,10 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
 
         RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-        VkSemaphore[] waitSemaphores = new[] { imageAvailableSemaphores[currentFrame] };
-        PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
-        CommandBuffer[] commands = new[] { commandBuffers[currentFrame] };
-        VkSemaphore[] signalSemaphores = new[] { renderFinishedSemaphores[currentFrame] };
+        VkSemaphore[] waitSemaphores = [imageAvailableSemaphores[currentFrame]];
+        PipelineStageFlags[] waitStages = [PipelineStageFlags.ColorAttachmentOutputBit];
+        CommandBuffer[] commands = [commandBuffers[currentFrame]];
+        VkSemaphore[] signalSemaphores = [renderFinishedSemaphores[currentFrame]];
 
         SubmitInfo submitInfo = new()
         {
@@ -931,7 +917,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
             throw new Exception("提交绘制命令缓冲区失败。");
         }
 
-        SwapchainKHR[] swapChains = new[] { swapchain };
+        SwapchainKHR[] swapChains = [swapchain];
 
         PresentInfoKHR presentInfo = new()
         {
@@ -1335,11 +1321,11 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
             DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit
         };
 
-        AttachmentDescription[] attachments = new AttachmentDescription[]
-        {
+        AttachmentDescription[] attachments =
+        [
             colorAttachment,
             depthAttachment
-        };
+        ];
 
         RenderPassCreateInfo renderPassInfo = new()
         {
@@ -1381,11 +1367,11 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
             PImmutableSamplers = null
         };
 
-        DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
-        {
+        DescriptorSetLayoutBinding[] bindings =
+        [
             uboLayoutBinding,
             samplerLayoutBinding
-        };
+        ];
 
         DescriptorSetLayoutCreateInfo layoutInfo = new()
         {
@@ -1427,18 +1413,18 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
         };
 
         // 着色器阶段
-        PipelineShaderStageCreateInfo[] shaderStageCreateInfos = new PipelineShaderStageCreateInfo[]
-        {
+        PipelineShaderStageCreateInfo[] shaderStageCreateInfos =
+        [
             vertShaderStageCreateInfo,
             fragShaderStageCreateInfo
-        };
+        ];
 
         // 动态状态
-        DynamicState[] dynamicStates = new DynamicState[]
-        {
+        DynamicState[] dynamicStates =
+        [
             DynamicState.Viewport,
             DynamicState.Scissor
-        };
+        ];
 
         PipelineDynamicStateCreateInfo dynamicState = new()
         {
@@ -1603,11 +1589,11 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
 
         for (int i = 0; i < swapchainFramebuffers.Length; i++)
         {
-            ImageView[] attachments = new ImageView[]
-            {
+            ImageView[] attachments =
+            [
                 swapchainImageViews[i],
                 depthImageView
-            };
+            ];
 
             FramebufferCreateInfo framebufferInfo = new()
             {
@@ -1747,8 +1733,8 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
             }
         };
 
-        ClearValue[] clearValues = new[]
-        {
+        ClearValue[] clearValues =
+        [
             new ClearValue()
             {
                 Color = new ClearColorValue
@@ -1767,7 +1753,7 @@ public unsafe class GeneratingMipmapsApplication : IDisposable
                     Stencil = 0
                 }
             }
-        };
+        ];
 
         renderPassBeginInfo.ClearValueCount = (uint)clearValues.Length;
         renderPassBeginInfo.PClearValues = (ClearValue*)Unsafe.AsPointer(ref clearValues[0]);

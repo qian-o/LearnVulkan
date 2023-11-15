@@ -39,8 +39,8 @@ public unsafe class DepthBufferingApplication : IDisposable
 
         public static VertexInputAttributeDescription[] GetAttributeDescriptions()
         {
-            return new[]
-            {
+            return
+            [
                 new VertexInputAttributeDescription
                 {
                     Binding = 0,
@@ -55,7 +55,7 @@ public unsafe class DepthBufferingApplication : IDisposable
                     Format = Format.R32G32Sfloat,
                     Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(TexCoord))
                 }
-            };
+            ];
         }
     }
 
@@ -65,8 +65,8 @@ public unsafe class DepthBufferingApplication : IDisposable
     private const float CameraSpeed = 4.0f;
     private const float CameraSensitivity = 0.2f;
 
-    private readonly Vertex[] vertices = new Vertex[]
-    {
+    private readonly Vertex[] vertices =
+    [
         new Vertex() { Pos = new Vector3D<float>(-0.5f, -0.5f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
         new Vertex() { Pos = new Vector3D<float>( 0.5f, -0.5f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 1.0f) },
         new Vertex() { Pos = new Vector3D<float>( 0.5f,  0.5f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
@@ -76,23 +76,23 @@ public unsafe class DepthBufferingApplication : IDisposable
         new Vertex() { Pos = new Vector3D<float>(1.0f, 0.0f, -0.5f), TexCoord = new Vector2D<float>(1.0f, 1.0f) },
         new Vertex() { Pos = new Vector3D<float>(1.0f, 1.0f, -0.5f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
         new Vertex() { Pos = new Vector3D<float>(0.0f, 1.0f, -0.5f), TexCoord = new Vector2D<float>(0.0f, 0.0f) }
-    };
+    ];
 
-    private readonly uint[] indices = new uint[]
-    {
+    private readonly uint[] indices =
+    [
         0, 1, 2, 2, 3, 0,
         4, 5, 6, 6, 7, 4
-    };
+    ];
 
-    private static readonly string[] ValidationLayers = new string[]
-    {
+    private static readonly string[] ValidationLayers =
+    [
         "VK_LAYER_KHRONOS_validation"
-    };
+    ];
 
-    private static readonly string[] DeviceExtensions = new string[]
-    {
+    private static readonly string[] DeviceExtensions =
+    [
         "VK_KHR_swapchain"
-    };
+    ];
 
     private IWindow window = null!;
 
@@ -251,10 +251,10 @@ public unsafe class DepthBufferingApplication : IDisposable
 
         RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-        VkSemaphore[] waitSemaphores = new[] { imageAvailableSemaphores[currentFrame] };
-        PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
-        CommandBuffer[] commands = new[] { commandBuffers[currentFrame] };
-        VkSemaphore[] signalSemaphores = new[] { renderFinishedSemaphores[currentFrame] };
+        VkSemaphore[] waitSemaphores = [imageAvailableSemaphores[currentFrame]];
+        PipelineStageFlags[] waitStages = [PipelineStageFlags.ColorAttachmentOutputBit];
+        CommandBuffer[] commands = [commandBuffers[currentFrame]];
+        VkSemaphore[] signalSemaphores = [renderFinishedSemaphores[currentFrame]];
 
         SubmitInfo submitInfo = new()
         {
@@ -273,7 +273,7 @@ public unsafe class DepthBufferingApplication : IDisposable
             throw new Exception("提交绘制命令缓冲区失败。");
         }
 
-        SwapchainKHR[] swapChains = new[] { swapchain };
+        SwapchainKHR[] swapChains = [swapchain];
 
         PresentInfoKHR presentInfo = new()
         {
@@ -677,11 +677,11 @@ public unsafe class DepthBufferingApplication : IDisposable
             DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit
         };
 
-        AttachmentDescription[] attachments = new AttachmentDescription[]
-        {
+        AttachmentDescription[] attachments =
+        [
             colorAttachment,
             depthAttachment
-        };
+        ];
 
         RenderPassCreateInfo renderPassInfo = new()
         {
@@ -723,11 +723,11 @@ public unsafe class DepthBufferingApplication : IDisposable
             PImmutableSamplers = null
         };
 
-        DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
-        {
+        DescriptorSetLayoutBinding[] bindings =
+        [
             uboLayoutBinding,
             samplerLayoutBinding
-        };
+        ];
 
         DescriptorSetLayoutCreateInfo layoutInfo = new()
         {
@@ -769,18 +769,18 @@ public unsafe class DepthBufferingApplication : IDisposable
         };
 
         // 着色器阶段
-        PipelineShaderStageCreateInfo[] shaderStageCreateInfos = new PipelineShaderStageCreateInfo[]
-        {
+        PipelineShaderStageCreateInfo[] shaderStageCreateInfos =
+        [
             vertShaderStageCreateInfo,
             fragShaderStageCreateInfo
-        };
+        ];
 
         // 动态状态
-        DynamicState[] dynamicStates = new DynamicState[]
-        {
+        DynamicState[] dynamicStates =
+        [
             DynamicState.Viewport,
             DynamicState.Scissor
-        };
+        ];
 
         PipelineDynamicStateCreateInfo dynamicState = new()
         {
@@ -1055,11 +1055,11 @@ public unsafe class DepthBufferingApplication : IDisposable
 
         for (int i = 0; i < swapchainFramebuffers.Length; i++)
         {
-            ImageView[] attachments = new ImageView[]
-            {
+            ImageView[] attachments =
+            [
                 swapchainImageViews[i],
                 depthImageView
-            };
+            ];
 
             FramebufferCreateInfo framebufferInfo = new()
             {
@@ -1249,8 +1249,8 @@ public unsafe class DepthBufferingApplication : IDisposable
     /// </summary>
     private void CreateDescriptorPool()
     {
-        DescriptorPoolSize[] poolSizes = new DescriptorPoolSize[]
-        {
+        DescriptorPoolSize[] poolSizes =
+        [
             new DescriptorPoolSize
             {
                 Type = DescriptorType.UniformBuffer,
@@ -1261,7 +1261,7 @@ public unsafe class DepthBufferingApplication : IDisposable
                 Type = DescriptorType.CombinedImageSampler,
                 DescriptorCount = MaxFramesInFlight
             }
-        };
+        ];
 
         DescriptorPoolCreateInfo poolInfo = new()
         {
@@ -1316,8 +1316,8 @@ public unsafe class DepthBufferingApplication : IDisposable
                 ImageLayout = ImageLayout.ShaderReadOnlyOptimal
             };
 
-            WriteDescriptorSet[] descriptorWrites = new[]
-            {
+            WriteDescriptorSet[] descriptorWrites =
+            [
                 new WriteDescriptorSet
                 {
                     SType = StructureType.WriteDescriptorSet,
@@ -1338,7 +1338,7 @@ public unsafe class DepthBufferingApplication : IDisposable
                     DescriptorCount = 1,
                     PImageInfo = &imageInfo
                 }
-            };
+            ];
 
             vk.UpdateDescriptorSets(device, (uint)descriptorWrites.Length, (WriteDescriptorSet*)Unsafe.AsPointer(ref descriptorWrites[0]), 0, null);
         }
@@ -1396,8 +1396,8 @@ public unsafe class DepthBufferingApplication : IDisposable
             }
         };
 
-        ClearValue[] clearValues = new[]
-        {
+        ClearValue[] clearValues =
+        [
             new ClearValue()
             {
                 Color = new ClearColorValue
@@ -1416,7 +1416,7 @@ public unsafe class DepthBufferingApplication : IDisposable
                     Stencil = 0
                 }
             }
-        };
+        ];
 
         renderPassBeginInfo.ClearValueCount = (uint)clearValues.Length;
         renderPassBeginInfo.PClearValues = (ClearValue*)Unsafe.AsPointer(ref clearValues[0]);

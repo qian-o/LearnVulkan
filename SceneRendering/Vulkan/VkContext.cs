@@ -12,15 +12,15 @@ namespace SceneRendering.Vulkan;
 
 public abstract class VkObject : VkDestroy
 {
-    public static readonly string[] ValidationLayers = new string[]
-    {
+    public static readonly string[] ValidationLayers =
+    [
         "VK_LAYER_KHRONOS_validation"
-    };
+    ];
 
-    public static readonly string[] DeviceExtensions = new string[]
-    {
+    public static readonly string[] DeviceExtensions =
+    [
         KhrSwapchain.ExtensionName
-    };
+    ];
 
     protected VkObject(VkContext parent) : base(parent)
     {
@@ -215,7 +215,7 @@ public unsafe class VkContext : VkDestroy
     /// 查找合适的深度格式。
     /// </summary>
     /// <returns></returns>
-    public Format FindDepthFormat() => FindSupportedFormat(new[] { Format.D32Sfloat, Format.D32SfloatS8Uint, Format.D24UnormS8Uint },
+    public Format FindDepthFormat() => FindSupportedFormat([Format.D32Sfloat, Format.D32SfloatS8Uint, Format.D24UnormS8Uint],
                                                            ImageTiling.Optimal,
                                                            FormatFeatureFlags.DepthStencilAttachmentBit);
 
@@ -301,10 +301,10 @@ public unsafe class VkContext : VkDestroy
         RecordCommandBuffer?.Invoke(Vk, CommandBuffers[imageIndex], delta);
         EndRecordCommandBuffer(CommandBuffers[imageIndex]);
 
-        Semaphore[] waitSemaphores = new[] { ImageAvailableSemaphores[CurrentFrame] };
-        PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
-        CommandBuffer[] commands = new[] { CommandBuffers[imageIndex] };
-        Semaphore[] signalSemaphores = new[] { RenderFinishedSemaphores[CurrentFrame] };
+        Semaphore[] waitSemaphores = [ImageAvailableSemaphores[CurrentFrame]];
+        PipelineStageFlags[] waitStages = [PipelineStageFlags.ColorAttachmentOutputBit];
+        CommandBuffer[] commands = [CommandBuffers[imageIndex]];
+        Semaphore[] signalSemaphores = [RenderFinishedSemaphores[CurrentFrame]];
 
         // 提交绘制命令缓冲区。
         {
@@ -328,7 +328,7 @@ public unsafe class VkContext : VkDestroy
 
         // 呈现图像。
         {
-            SwapchainKHR[] swapChains = new[] { Swapchain };
+            SwapchainKHR[] swapChains = [Swapchain];
 
             PresentInfoKHR presentInfo = new()
             {
@@ -426,8 +426,8 @@ public unsafe class VkContext : VkDestroy
             }
         };
 
-        ClearValue[] clearValues = new[]
-        {
+        ClearValue[] clearValues =
+        [
             new ClearValue()
             {
                 Color = new ClearColorValue
@@ -446,7 +446,7 @@ public unsafe class VkContext : VkDestroy
                     Stencil = 0
                 }
             }
-        };
+        ];
 
         renderPassBeginInfo.ClearValueCount = (uint)clearValues.Length;
         renderPassBeginInfo.PClearValues = (ClearValue*)Unsafe.AsPointer(ref clearValues[0]);

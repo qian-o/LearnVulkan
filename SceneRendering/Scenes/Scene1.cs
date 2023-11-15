@@ -6,13 +6,9 @@ using Silk.NET.Windowing;
 
 namespace SceneRendering.Scenes;
 
-public unsafe class Scene1 : Scene
+public unsafe class Scene1(IWindow window) : Scene(window)
 {
     private VkContext? context;
-
-    public Scene1(IWindow window) : base(window)
-    {
-    }
 
     protected override void Load()
     {

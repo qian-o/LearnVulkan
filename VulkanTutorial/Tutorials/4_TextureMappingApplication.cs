@@ -38,8 +38,8 @@ public unsafe class TextureMappingApplication : IDisposable
 
         public static VertexInputAttributeDescription[] GetAttributeDescriptions()
         {
-            return new[]
-            {
+            return
+            [
                 new VertexInputAttributeDescription
                 {
                     Binding = 0,
@@ -61,7 +61,7 @@ public unsafe class TextureMappingApplication : IDisposable
                     Format = Format.R32G32Sfloat,
                     Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(TexCoord))
                 }
-            };
+            ];
         }
     }
 
@@ -69,28 +69,28 @@ public unsafe class TextureMappingApplication : IDisposable
     private const uint Height = 600;
     private const int MaxFramesInFlight = 2;
 
-    private readonly Vertex[] vertices = new Vertex[]
-    {
-        new Vertex() { Pos = new Vector2D<float>(-0.5f, -0.5f), Color = new Vector3D<float>(1.0f, 0.0f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
-        new Vertex() { Pos = new Vector2D<float>( 0.5f, -0.5f), Color = new Vector3D<float>(0.0f, 1.0f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 0.0f) },
-        new Vertex() { Pos = new Vector2D<float>( 0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 0.0f, 1.0f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
-        new Vertex() { Pos = new Vector2D<float>(-0.5f,  0.5f), Color = new Vector3D<float>(1.0f, 1.0f, 1.0f), TexCoord = new Vector2D<float>(1.0f, 1.0f) }
-    };
+    private readonly Vertex[] vertices =
+    [
+        new() { Pos = new Vector2D<float>(-0.5f, -0.5f), Color = new Vector3D<float>(1.0f, 0.0f, 0.0f), TexCoord = new Vector2D<float>(1.0f, 0.0f) },
+        new() { Pos = new Vector2D<float>( 0.5f, -0.5f), Color = new Vector3D<float>(0.0f, 1.0f, 0.0f), TexCoord = new Vector2D<float>(0.0f, 0.0f) },
+        new() { Pos = new Vector2D<float>( 0.5f,  0.5f), Color = new Vector3D<float>(0.0f, 0.0f, 1.0f), TexCoord = new Vector2D<float>(0.0f, 1.0f) },
+        new() { Pos = new Vector2D<float>(-0.5f,  0.5f), Color = new Vector3D<float>(1.0f, 1.0f, 1.0f), TexCoord = new Vector2D<float>(1.0f, 1.0f) }
+    ];
 
-    private readonly uint[] indices = new uint[]
-    {
+    private readonly uint[] indices =
+    [
         0, 1, 2, 2, 3, 0
-    };
+    ];
 
-    private static readonly string[] ValidationLayers = new string[]
-    {
+    private static readonly string[] ValidationLayers =
+    [
         "VK_LAYER_KHRONOS_validation"
-    };
+    ];
 
-    private static readonly string[] DeviceExtensions = new string[]
-    {
+    private static readonly string[] DeviceExtensions =
+    [
         "VK_KHR_swapchain"
-    };
+    ];
 
     private IWindow window = null!;
 
@@ -220,10 +220,10 @@ public unsafe class TextureMappingApplication : IDisposable
 
         RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-        VkSemaphore[] waitSemaphores = new[] { imageAvailableSemaphores[currentFrame] };
-        PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
-        CommandBuffer[] commands = new[] { commandBuffers[currentFrame] };
-        VkSemaphore[] signalSemaphores = new[] { renderFinishedSemaphores[currentFrame] };
+        VkSemaphore[] waitSemaphores = [imageAvailableSemaphores[currentFrame]];
+        PipelineStageFlags[] waitStages = [PipelineStageFlags.ColorAttachmentOutputBit];
+        CommandBuffer[] commands = [commandBuffers[currentFrame]];
+        VkSemaphore[] signalSemaphores = [renderFinishedSemaphores[currentFrame]];
 
         SubmitInfo submitInfo = new()
         {
@@ -242,7 +242,7 @@ public unsafe class TextureMappingApplication : IDisposable
             throw new Exception("提交绘制命令缓冲区失败。");
         }
 
-        SwapchainKHR[] swapChains = new[] { swapchain };
+        SwapchainKHR[] swapChains = [swapchain];
 
         PresentInfoKHR presentInfo = new()
         {
@@ -605,11 +605,11 @@ public unsafe class TextureMappingApplication : IDisposable
             PImmutableSamplers = null
         };
 
-        DescriptorSetLayoutBinding[] bindings = new DescriptorSetLayoutBinding[]
-        {
+        DescriptorSetLayoutBinding[] bindings =
+        [
             uboLayoutBinding,
             samplerLayoutBinding
-        };
+        ];
 
         DescriptorSetLayoutCreateInfo layoutInfo = new()
         {
@@ -651,18 +651,18 @@ public unsafe class TextureMappingApplication : IDisposable
         };
 
         // 着色器阶段
-        PipelineShaderStageCreateInfo[] shaderStageCreateInfos = new PipelineShaderStageCreateInfo[]
-        {
+        PipelineShaderStageCreateInfo[] shaderStageCreateInfos =
+        [
             vertShaderStageCreateInfo,
             fragShaderStageCreateInfo
-        };
+        ];
 
         // 动态状态
-        DynamicState[] dynamicStates = new DynamicState[]
-        {
+        DynamicState[] dynamicStates =
+        [
             DynamicState.Viewport,
             DynamicState.Scissor
-        };
+        ];
 
         PipelineDynamicStateCreateInfo dynamicState = new()
         {
@@ -928,10 +928,10 @@ public unsafe class TextureMappingApplication : IDisposable
 
         for (int i = 0; i < swapchainFramebuffers.Length; i++)
         {
-            ImageView[] attachments = new ImageView[]
-            {
+            ImageView[] attachments =
+            [
                 swapchainImageViews[i]
-            };
+            ];
 
             FramebufferCreateInfo framebufferInfo = new()
             {
@@ -1088,8 +1088,8 @@ public unsafe class TextureMappingApplication : IDisposable
     /// </summary>
     private void CreateDescriptorPool()
     {
-        DescriptorPoolSize[] poolSizes = new DescriptorPoolSize[]
-        {
+        DescriptorPoolSize[] poolSizes =
+        [
             new DescriptorPoolSize
             {
                 Type = DescriptorType.UniformBuffer,
@@ -1100,7 +1100,7 @@ public unsafe class TextureMappingApplication : IDisposable
                 Type = DescriptorType.CombinedImageSampler,
                 DescriptorCount = MaxFramesInFlight
             }
-        };
+        ];
 
         DescriptorPoolCreateInfo poolInfo = new()
         {
@@ -1155,8 +1155,8 @@ public unsafe class TextureMappingApplication : IDisposable
                 ImageLayout = ImageLayout.ShaderReadOnlyOptimal
             };
 
-            WriteDescriptorSet[] descriptorWrites = new[]
-            {
+            WriteDescriptorSet[] descriptorWrites =
+            [
                 new WriteDescriptorSet
                 {
                     SType = StructureType.WriteDescriptorSet,
@@ -1177,7 +1177,7 @@ public unsafe class TextureMappingApplication : IDisposable
                     DescriptorCount = 1,
                     PImageInfo = &imageInfo
                 }
-            };
+            ];
 
             vk.UpdateDescriptorSets(device, (uint)descriptorWrites.Length, (WriteDescriptorSet*)Unsafe.AsPointer(ref descriptorWrites[0]), 0, null);
         }

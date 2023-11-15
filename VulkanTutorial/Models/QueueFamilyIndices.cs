@@ -45,11 +45,11 @@ public readonly unsafe struct QueueFamilyIndices
     {
         if (GraphicsFamily == PresentFamily)
         {
-            return new uint[] { GraphicsFamily };
+            return [GraphicsFamily];
         }
         else
         {
-            return new uint[] { GraphicsFamily, PresentFamily };
+            return [GraphicsFamily, PresentFamily];
         }
     }
 }

@@ -24,8 +24,8 @@ public struct Vertex
 
     public static VertexInputAttributeDescription[] GetAttributeDescriptions()
     {
-        return new[]
-        {
+        return
+        [
             new VertexInputAttributeDescription
             {
                 Binding = 0,
@@ -47,6 +47,6 @@ public struct Vertex
                 Format = Format.R32G32Sfloat,
                 Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(TexCoord))
             }
-        };
+        ];
     }
 }

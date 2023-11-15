@@ -20,15 +20,15 @@ public unsafe class HelloTriangleApplication : IDisposable
     private const uint Height = 600;
     private const int MaxFramesInFlight = 2;
 
-    private static readonly string[] ValidationLayers = new string[]
-    {
+    private static readonly string[] ValidationLayers =
+    [
         "VK_LAYER_KHRONOS_validation"
-    };
+    ];
 
-    private static readonly string[] DeviceExtensions = new string[]
-    {
+    private static readonly string[] DeviceExtensions =
+    [
         "VK_KHR_swapchain"
-    };
+    ];
 
     private IWindow window = null!;
 
@@ -133,10 +133,10 @@ public unsafe class HelloTriangleApplication : IDisposable
 
         RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-        Semaphore[] waitSemaphores = new[] { imageAvailableSemaphores[currentFrame] };
-        PipelineStageFlags[] waitStages = new[] { PipelineStageFlags.ColorAttachmentOutputBit };
-        CommandBuffer[] commands = new[] { commandBuffers[currentFrame] };
-        Semaphore[] signalSemaphores = new[] { renderFinishedSemaphores[currentFrame] };
+        Semaphore[] waitSemaphores = [imageAvailableSemaphores[currentFrame]];
+        PipelineStageFlags[] waitStages = [PipelineStageFlags.ColorAttachmentOutputBit];
+        CommandBuffer[] commands = [commandBuffers[currentFrame]];
+        Semaphore[] signalSemaphores = [renderFinishedSemaphores[currentFrame]];
 
         SubmitInfo submitInfo = new()
         {
@@ -155,7 +155,7 @@ public unsafe class HelloTriangleApplication : IDisposable
             throw new Exception("提交绘制命令缓冲区失败。");
         }
 
-        SwapchainKHR[] swapChains = new[] { swapchain };
+        SwapchainKHR[] swapChains = [swapchain];
 
         PresentInfoKHR presentInfo = new()
         {
@@ -548,18 +548,18 @@ public unsafe class HelloTriangleApplication : IDisposable
         };
 
         // 着色器阶段
-        PipelineShaderStageCreateInfo[] shaderStageCreateInfos = new PipelineShaderStageCreateInfo[]
-        {
+        PipelineShaderStageCreateInfo[] shaderStageCreateInfos =
+        [
             vertShaderStageCreateInfo,
             fragShaderStageCreateInfo
-        };
+        ];
 
         // 动态状态
-        DynamicState[] dynamicStates = new DynamicState[]
-        {
+        DynamicState[] dynamicStates =
+        [
             DynamicState.Viewport,
             DynamicState.Scissor
-        };
+        ];
 
         PipelineDynamicStateCreateInfo dynamicState = new()
         {
@@ -706,10 +706,10 @@ public unsafe class HelloTriangleApplication : IDisposable
 
         for (int i = 0; i < swapchainFramebuffers.Length; i++)
         {
-            ImageView[] attachments = new ImageView[]
-            {
+            ImageView[] attachments =
+            [
                 swapchainImageViews[i]
-            };
+            ];
 
             FramebufferCreateInfo framebufferInfo = new()
             {

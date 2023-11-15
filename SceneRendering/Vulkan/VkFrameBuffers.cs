@@ -4,17 +4,13 @@ using System.Runtime.CompilerServices;
 
 namespace SceneRendering.Vulkan;
 
-public unsafe class VkFrameBuffers : VkReuseObject
+public unsafe class VkFrameBuffers(VkContext parent) : VkReuseObject(parent)
 {
     public VkImage ColorImage = null!;
 
     public VkImage DepthImage = null!;
 
-    public Framebuffer[] FrameBuffers = Array.Empty<Framebuffer>();
-
-    public VkFrameBuffers(VkContext parent) : base(parent)
-    {
-    }
+    public Framebuffer[] FrameBuffers = [];
 
     protected override void Core()
     {
@@ -53,12 +49,12 @@ public unsafe class VkFrameBuffers : VkReuseObject
 
         for (int i = 0; i < FrameBuffers.Length; i++)
         {
-            ImageView[] attachments = new ImageView[]
-            {
+            ImageView[] attachments =
+            [
                 ColorImage.ImageView,
                 DepthImage.ImageView,
                 Context.SwapChainImages[i].ImageView
-            };
+            ];
 
             FramebufferCreateInfo createInfo = new()
             {
