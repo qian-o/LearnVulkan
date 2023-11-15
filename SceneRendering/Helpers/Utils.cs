@@ -5,6 +5,10 @@ namespace SceneRendering.Helpers;
 
 public unsafe partial class Utils
 {
+    public const float Pi = 3.1415927f;
+
+    public const float PiOver2 = Pi / 2.0f;
+
     [GeneratedRegex("([A-Z])", RegexOptions.Compiled)]
     private static partial Regex CamelCase();
 
@@ -66,5 +70,10 @@ public unsafe partial class Utils
         }
 
         return strs;
+    }
+
+    public static float Clamp(float n, float min, float max)
+    {
+        return Math.Max(Math.Min(n, max), min);
     }
 }

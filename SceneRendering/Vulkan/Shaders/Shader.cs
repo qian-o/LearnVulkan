@@ -4,9 +4,9 @@ namespace SceneRendering.Vulkan.Shaders;
 
 public class Shader
 {
-    public const string VertexShader = @"Resources/Shaders/vert.spv";
+    public const string VertexShader = @"Assets/Shaders/vert.spv";
 
-    public const string FragmentShader = @"Resources/Shaders/frag.spv";
+    public const string FragmentShader = @"Assets/Shaders/frag.spv";
 
     public const string VertexEntryPoint = "main";
 

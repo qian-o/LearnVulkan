@@ -69,6 +69,20 @@ public unsafe class VkBuffer : VkObject
         Vk.UnmapMemory(Context.Device, BufferMemory);
     }
 
+    public void CopyBuffer(VkBuffer dst, ulong size)
+    {
+        CommandBuffer commandBuffer = Context.BeginSingleTimeCommands();
+
+        BufferCopy copyRegion = new()
+        {
+            Size = size
+        };
+
+        Vk.CmdCopyBuffer(commandBuffer, Buffer, dst.Buffer, 1, &copyRegion);
+
+        Context.EndSingleTimeCommands(commandBuffer);
+    }
+
     protected override void Destroy()
     {
         Vk.DestroyBuffer(Context.Device, Buffer, null);

@@ -17,7 +17,7 @@ public unsafe class VkImage : VkObject
 
     public readonly Format Format;
 
-    public readonly ImageLayout Layout;
+    public ImageLayout Layout;
 
     public readonly ImageTiling Tiling;
 
@@ -179,12 +179,7 @@ public unsafe class VkImage : VkObject
         Buffer.MemoryCopy(pixels, data, size, size);
         stagingBuffer.UnmapMemory();
 
-        ImageLayout layout = Layout;
-        TransitionImageLayout(ImageLayout.TransferDstOptimal);
-
         CopyBufferToImage(stagingBuffer);
-
-        TransitionImageLayout(layout);
 
         stagingBuffer.Dispose();
     }
@@ -329,7 +324,7 @@ public unsafe class VkImage : VkObject
     /// 转换图像布局。
     /// </summary>
     /// <param name="imageLayout">imageLayout</param>
-    private void TransitionImageLayout(ImageLayout imageLayout)
+    public void TransitionImageLayout(ImageLayout imageLayout)
     {
         if (Layout == imageLayout)
         {
@@ -409,6 +404,8 @@ public unsafe class VkImage : VkObject
         Vk.CmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, null, 0, null, 1, &barrier);
 
         Context.EndSingleTimeCommands(commandBuffer);
+
+        Layout = newLayout;
     }
 
     /// <summary>

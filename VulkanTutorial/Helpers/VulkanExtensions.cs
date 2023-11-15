@@ -24,7 +24,7 @@ public static unsafe class VulkanExtensions
 
         if (EnableValidationLayers)
         {
-            glfwExtensions = glfwExtensions.Append("VK_EXT_debug_utils").ToArray();
+            glfwExtensions = [.. glfwExtensions, "VK_EXT_debug_utils"];
         }
 
         return glfwExtensions;
@@ -553,7 +553,7 @@ public static unsafe class VulkanExtensions
     public static Format FindDepthFormat(this Vk vk, PhysicalDevice physicalDevice)
     {
         return vk.FindSupportedFormat(physicalDevice,
-                                      new[] { Format.D32Sfloat, Format.D32SfloatS8Uint, Format.D24UnormS8Uint },
+                                      [Format.D32Sfloat, Format.D32SfloatS8Uint, Format.D24UnormS8Uint],
                                       ImageTiling.Optimal,
                                       FormatFeatureFlags.DepthStencilAttachmentBit);
     }
