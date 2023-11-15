@@ -622,12 +622,12 @@ public unsafe class MultisamplingApplication : IDisposable
         {
             DescriptorPoolSize[] poolSizes = new DescriptorPoolSize[]
             {
-                new DescriptorPoolSize
+                new()
                 {
                     Type = DescriptorType.UniformBuffer,
                     DescriptorCount = 1
                 },
-                new DescriptorPoolSize
+                new()
                 {
                     Type = DescriptorType.CombinedImageSampler,
                     DescriptorCount = 1

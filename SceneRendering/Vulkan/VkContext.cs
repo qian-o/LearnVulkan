@@ -220,6 +220,55 @@ public unsafe class VkContext : VkDestroy
                                                            FormatFeatureFlags.DepthStencilAttachmentBit);
 
     /// <summary>
+    /// 开启临时命令缓冲区。
+    /// </summary>
+    /// <returns></returns>
+    public CommandBuffer BeginSingleTimeCommands()
+    {
+        CommandBufferAllocateInfo allocateInfo = new()
+        {
+            SType = StructureType.CommandBufferAllocateInfo,
+            Level = CommandBufferLevel.Primary,
+            CommandPool = CommandPool,
+            CommandBufferCount = 1
+        };
+
+        CommandBuffer commandBuffer;
+        Vk.AllocateCommandBuffers(Device, &allocateInfo, &commandBuffer);
+
+        CommandBufferBeginInfo beginInfo = new()
+        {
+            SType = StructureType.CommandBufferBeginInfo,
+            Flags = CommandBufferUsageFlags.OneTimeSubmitBit,
+        };
+
+        Vk.BeginCommandBuffer(commandBuffer, &beginInfo);
+
+        return commandBuffer;
+    }
+
+    /// <summary>
+    /// 结束临时命令缓冲区。
+    /// </summary>
+    /// <param name="commandBuffer">commandBuffer</param>
+    public void EndSingleTimeCommands(CommandBuffer commandBuffer)
+    {
+        Vk.EndCommandBuffer(commandBuffer);
+
+        SubmitInfo submitInfo = new()
+        {
+            SType = StructureType.SubmitInfo,
+            CommandBufferCount = 1,
+            PCommandBuffers = &commandBuffer
+        };
+
+        Vk.QueueSubmit(GraphicsQueue, 1, &submitInfo, default);
+        Vk.QueueWaitIdle(GraphicsQueue);
+
+        Vk.FreeCommandBuffers(Device, CommandPool, 1, &commandBuffer);
+    }
+
+    /// <summary>
     /// 绘制帧。
     /// </summary>
     /// <param name="delta">delta</param>
