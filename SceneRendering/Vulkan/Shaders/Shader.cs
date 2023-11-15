@@ -32,10 +32,10 @@ public class Shader
             PImmutableSamplers = null
         };
 
-        return new DescriptorSetLayoutBinding[]
-        {
+        return
+        [
             uboBinding,
             samplerBinding
-        };
+        ];
     }
 }

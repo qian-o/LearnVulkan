@@ -130,7 +130,7 @@ public unsafe class VkInstance : VkObject
 
         if (EnableValidationLayers)
         {
-            glfwExtensions = glfwExtensions.Append(ExtDebugUtils.ExtensionName).ToArray();
+            glfwExtensions = [.. glfwExtensions, ExtDebugUtils.ExtensionName];
         }
 
         return glfwExtensions;
