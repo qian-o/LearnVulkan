@@ -1,10 +1,10 @@
-﻿using Silk.NET.Core;
+﻿using System.Runtime.CompilerServices;
+using Silk.NET.Core;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
-using System.Runtime.CompilerServices;
 using VulkanTutorial.Helpers;
 using VulkanTutorial.Models;
 using Semaphore = Silk.NET.Vulkan.Semaphore;
@@ -27,7 +27,7 @@ public unsafe class HelloTriangleApplication : IDisposable
 
     private static readonly string[] DeviceExtensions =
     [
-        "VK_KHR_swapchain"
+        KhrSwapchain.ExtensionName, KhrDynamicRendering.ExtensionName, KhrSynchronization2.ExtensionName
     ];
 
     private IWindow window = null!;
@@ -36,6 +36,7 @@ public unsafe class HelloTriangleApplication : IDisposable
     private ExtDebugUtils debugUtils = null!;
     private KhrSurface khrSurface = null!;
     private KhrSwapchain khrSwapchain = null!;
+    private KhrDynamicRendering khrDynamicRendering = null!;
 
     private Instance instance;
     private SurfaceKHR surface;
@@ -204,7 +205,7 @@ public unsafe class HelloTriangleApplication : IDisposable
             ApplicationVersion = new Version32(1, 0, 0),
             PEngineName = Utils.StringToPointer("No Engine"),
             EngineVersion = new Version32(1, 0, 0),
-            ApiVersion = Vk.Version10
+            ApiVersion = Vk.Version12
         };
 
         InstanceCreateInfo createInfo = new()
@@ -335,12 +336,19 @@ public unsafe class HelloTriangleApplication : IDisposable
 
         PhysicalDeviceFeatures deviceFeatures = new();
 
+        PhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures = new()
+        {
+            SType = StructureType.PhysicalDeviceDynamicRenderingFeaturesKhr,
+            DynamicRendering = Vk.True
+        };
+
         DeviceCreateInfo createInfo = new()
         {
             SType = StructureType.DeviceCreateInfo,
             QueueCreateInfoCount = (uint)deviceQueueCreateInfos.Length,
             PQueueCreateInfos = (DeviceQueueCreateInfo*)Unsafe.AsPointer(ref deviceQueueCreateInfos[0]),
-            PEnabledFeatures = &deviceFeatures
+            PEnabledFeatures = &deviceFeatures,
+            PNext = &dynamicRenderingFeatures
         };
 
         if (VulkanExtensions.EnableValidationLayers)
@@ -360,6 +368,11 @@ public unsafe class HelloTriangleApplication : IDisposable
         if (!vk.TryGetDeviceExtension(instance, device, out khrSwapchain))
         {
             throw new Exception("找不到交换链扩展。");
+        }
+
+        if (!vk.TryGetDeviceExtension(instance, device, out khrDynamicRendering))
+        {
+            throw new Exception("找不到动态渲染扩展。");
         }
 
         vk.GetDeviceQueue(device, queueFamilyIndices.GraphicsFamily, 0, out graphicsQueue);
@@ -665,6 +678,15 @@ public unsafe class HelloTriangleApplication : IDisposable
             throw new Exception("创建管线布局失败。");
         }
 
+        Format format = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format;
+
+        PipelineRenderingCreateInfoKHR pipelineRenderingInfoKHR = new()
+        {
+            SType = StructureType.PipelineRenderingCreateInfoKhr,
+            ColorAttachmentCount = 1,
+            PColorAttachmentFormats = &format
+        };
+
         // 创建管线
         GraphicsPipelineCreateInfo pipelineInfo = new()
         {
@@ -680,10 +702,10 @@ public unsafe class HelloTriangleApplication : IDisposable
             PColorBlendState = &colorBlending,
             PDynamicState = &dynamicState,
             Layout = pipelineLayout,
-            RenderPass = renderPass,
             Subpass = 0,
             BasePipelineHandle = default,
-            BasePipelineIndex = -1
+            BasePipelineIndex = -1,
+            PNext = &pipelineRenderingInfoKHR
         };
 
         if (vk.CreateGraphicsPipelines(device, default, 1, &pipelineInfo, null, out graphicsPipeline) != Result.Success)
@@ -787,21 +809,34 @@ public unsafe class HelloTriangleApplication : IDisposable
             throw new Exception("开始记录命令缓冲失败。");
         }
 
-        RenderPassBeginInfo renderPassBeginInfo = new()
+        ImageMemoryBarrier imageMemoryBarrier1 = new()
         {
-            SType = StructureType.RenderPassBeginInfo,
-            RenderPass = renderPass,
-            Framebuffer = swapchainFramebuffers[imageIndex],
-            RenderArea = new Rect2D
+            SType = StructureType.ImageMemoryBarrier,
+            DstAccessMask = AccessFlags.ColorAttachmentWriteBit,
+            OldLayout = ImageLayout.Undefined,
+            NewLayout = ImageLayout.ColorAttachmentOptimal,
+            Image = swapchainImages[imageIndex],
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            SubresourceRange = new ImageSubresourceRange
             {
-                Offset = new Offset2D
-                {
-                    X = 0,
-                    Y = 0
-                },
-                Extent = extent
+                AspectMask = ImageAspectFlags.ColorBit,
+                BaseMipLevel = 0,
+                LevelCount = 1,
+                BaseArrayLayer = 0,
+                LayerCount = 1
             }
         };
+
+        vk.CmdPipelineBarrier(commandBuffer,
+                              PipelineStageFlags.TopOfPipeBit,
+                              PipelineStageFlags.ColorAttachmentOutputBit,
+                              0,
+                              null,
+                              0,
+                              null,
+                              1,
+                              &imageMemoryBarrier1);
 
         ClearValue clearColor = new()
         {
@@ -813,10 +848,35 @@ public unsafe class HelloTriangleApplication : IDisposable
                 Float32_3 = 1.0f
             }
         };
-        renderPassBeginInfo.ClearValueCount = 1;
-        renderPassBeginInfo.PClearValues = &clearColor;
 
-        vk.CmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, SubpassContents.Inline);
+        RenderingAttachmentInfo colorAttachmentInfo = new()
+        {
+            SType = StructureType.RenderingAttachmentInfoKhr,
+            ImageView = swapchainImageViews[imageIndex],
+            ImageLayout = ImageLayout.AttachmentOptimalKhr,
+            LoadOp = AttachmentLoadOp.Clear,
+            StoreOp = AttachmentStoreOp.Store,
+            ClearValue = clearColor
+        };
+
+        RenderingInfo renderingInfoKHR = new()
+        {
+            SType = StructureType.RenderingInfoKhr,
+            RenderArea = new Rect2D
+            {
+                Offset = new Offset2D
+                {
+                    X = 0,
+                    Y = 0
+                },
+                Extent = extent
+            },
+            LayerCount = 1,
+            ColorAttachmentCount = 1,
+            PColorAttachments = &colorAttachmentInfo
+        };
+
+        khrDynamicRendering.CmdBeginRendering(commandBuffer, &renderingInfoKHR);
 
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, graphicsPipeline);
 
@@ -844,7 +904,36 @@ public unsafe class HelloTriangleApplication : IDisposable
 
         vk.CmdDraw(commandBuffer, 3, 1, 0, 0);
 
-        vk.CmdEndRenderPass(commandBuffer);
+        khrDynamicRendering.CmdEndRendering(commandBuffer);
+
+        ImageMemoryBarrier imageMemoryBarrier = new()
+        {
+            SType = StructureType.ImageMemoryBarrier,
+            SrcAccessMask = AccessFlags.ColorAttachmentWriteBit,
+            OldLayout = ImageLayout.ColorAttachmentOptimal,
+            NewLayout = ImageLayout.PresentSrcKhr,
+            Image = swapchainImages[imageIndex],
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            SubresourceRange = new ImageSubresourceRange
+            {
+                AspectMask = ImageAspectFlags.ColorBit,
+                BaseMipLevel = 0,
+                LevelCount = 1,
+                BaseArrayLayer = 0,
+                LayerCount = 1
+            }
+        };
+
+        vk.CmdPipelineBarrier(commandBuffer,
+                              PipelineStageFlags.ColorAttachmentOutputBit,
+                              PipelineStageFlags.BottomOfPipeBit,
+                              0,
+                              null,
+                              0,
+                              null,
+                              1,
+                              &imageMemoryBarrier);
 
         if (vk.EndCommandBuffer(commandBuffer) != Result.Success)
         {
