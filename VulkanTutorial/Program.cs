@@ -8,7 +8,7 @@ internal class Program
     {
         _ = args;
 
-        using MultisamplingApplication app = new();
+        using GeneratingMipmapsApplication app = new();
 
         app.Run();
     }

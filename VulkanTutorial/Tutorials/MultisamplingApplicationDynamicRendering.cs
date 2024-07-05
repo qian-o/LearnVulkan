@@ -24,7 +24,7 @@ using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace VulkanTutorial.Tutorials;
 
-public unsafe class MultisamplingApplication : IDisposable
+public unsafe class MultisamplingApplicationDynamicRendering : IDisposable
 {
     public struct Vertex
     {
@@ -755,7 +755,7 @@ public unsafe class MultisamplingApplication : IDisposable
 
     private static readonly string[] DeviceExtensions =
     [
-        "VK_KHR_swapchain"
+        KhrSwapchain.ExtensionName, KhrDynamicRendering.ExtensionName, "VK_KHR_depth_stencil_resolve","VK_KHR_create_renderpass2", KhrSynchronization2.ExtensionName
     ];
 
     private IWindow window = null!;
@@ -773,11 +773,12 @@ public unsafe class MultisamplingApplication : IDisposable
     private ExtDebugUtils debugUtils = null!;
     private KhrSurface khrSurface = null!;
     private KhrSwapchain khrSwapchain = null!;
+    private KhrDynamicRendering khrDynamicRendering = null!;
 
     private Instance instance;
     private SurfaceKHR surface;
     private PhysicalDevice physicalDevice;
-    private SampleCountFlags msaaSamples = SampleCountFlags.Count1Bit;
+    private SampleCountFlags msaaSamples = SampleCountFlags.Count8Bit;
     private Device device;
     private Queue graphicsQueue;
     private Queue presentQueue;
@@ -815,6 +816,13 @@ public unsafe class MultisamplingApplication : IDisposable
     public void Run()
     {
         WindowOptions options = WindowOptions.DefaultVulkan;
+        options.API = new GraphicsAPI()
+        {
+            API = ContextAPI.Vulkan,
+            Profile = ContextProfile.Core,
+            Flags = ContextFlags.ForwardCompatible,
+            Version = new APIVersion(1, 3)
+        };
         options.Size = new Vector2D<int>((int)Width, (int)Height);
         options.Title = "Vulkan Tutorial";
 
@@ -1130,6 +1138,12 @@ public unsafe class MultisamplingApplication : IDisposable
                 msaaSamples = vk.GetMaxUsableSampleCount(device);
                 queueFamilyIndices = temp;
 
+
+                PhysicalDeviceProperties properties;
+                vk.GetPhysicalDeviceProperties(device, &properties);
+
+                Console.WriteLine($"选择物理设备：{Marshal.PtrToStringAnsi((IntPtr)properties.DeviceName)}");
+
                 break;
             }
         }
@@ -1168,12 +1182,19 @@ public unsafe class MultisamplingApplication : IDisposable
             SampleRateShading = Vk.True
         };
 
+        PhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures = new()
+        {
+            SType = StructureType.PhysicalDeviceDynamicRenderingFeaturesKhr,
+            DynamicRendering = Vk.True
+        };
+
         DeviceCreateInfo createInfo = new()
         {
             SType = StructureType.DeviceCreateInfo,
             QueueCreateInfoCount = (uint)deviceQueueCreateInfos.Length,
             PQueueCreateInfos = (DeviceQueueCreateInfo*)Unsafe.AsPointer(ref deviceQueueCreateInfos[0]),
-            PEnabledFeatures = &deviceFeatures
+            PEnabledFeatures = &deviceFeatures,
+            PNext = &dynamicRenderingFeatures
         };
 
         if (VulkanExtensions.EnableValidationLayers)
@@ -1193,6 +1214,11 @@ public unsafe class MultisamplingApplication : IDisposable
         if (!vk.TryGetDeviceExtension(instance, device, out khrSwapchain))
         {
             throw new Exception("找不到交换链扩展。");
+        }
+
+        if (!vk.TryGetDeviceExtension(instance, device, out khrDynamicRendering))
+        {
+            throw new Exception("找不到动态渲染扩展。");
         }
 
         vk.GetDeviceQueue(device, queueFamilyIndices.GraphicsFamily, 0, out graphicsQueue);
@@ -1584,6 +1610,21 @@ public unsafe class MultisamplingApplication : IDisposable
             throw new Exception("创建管线布局失败。");
         }
 
+        Format colorFormat = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format;
+        Format resolveColorFormat = swapChainSupportDetails.ChooseSwapSurfaceFormat().Format;
+
+        Format[] colorFormats = [colorFormat, resolveColorFormat];
+
+        Format depthFormat = vk.FindDepthFormat(physicalDevice);
+
+        PipelineRenderingCreateInfoKHR pipelineRenderingInfoKHR = new()
+        {
+            SType = StructureType.PipelineRenderingCreateInfoKhr,
+            ColorAttachmentCount = 1,
+            PColorAttachmentFormats = (Format*)Unsafe.AsPointer(ref colorFormats[0]),
+            DepthAttachmentFormat = depthFormat,
+        };
+
         // 创建管线
         GraphicsPipelineCreateInfo pipelineInfo = new()
         {
@@ -1599,10 +1640,10 @@ public unsafe class MultisamplingApplication : IDisposable
             PColorBlendState = &colorBlending,
             PDynamicState = &dynamicState,
             Layout = pipelineLayout,
-            RenderPass = renderPass,
             Subpass = 0,
             BasePipelineHandle = default,
-            BasePipelineIndex = -1
+            BasePipelineIndex = -1,
+            PNext = &pipelineRenderingInfoKHR
         };
 
         if (vk.CreateGraphicsPipelines(device, default, 1, &pipelineInfo, null, out graphicsPipeline) != Result.Success)
@@ -1802,21 +1843,36 @@ public unsafe class MultisamplingApplication : IDisposable
             throw new Exception("开始记录命令缓冲失败。");
         }
 
-        RenderPassBeginInfo renderPassBeginInfo = new()
         {
-            SType = StructureType.RenderPassBeginInfo,
-            RenderPass = renderPass,
-            Framebuffer = swapchainFramebuffers[imageIndex],
-            RenderArea = new Rect2D
+            ImageMemoryBarrier imageMemoryBarrier1 = new()
             {
-                Offset = new Offset2D
+                SType = StructureType.ImageMemoryBarrier,
+                DstAccessMask = AccessFlags.ColorAttachmentWriteBit,
+                OldLayout = ImageLayout.Undefined,
+                NewLayout = ImageLayout.ColorAttachmentOptimal,
+                Image = swapchainImages[imageIndex],
+                SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                SubresourceRange = new ImageSubresourceRange
                 {
-                    X = 0,
-                    Y = 0
-                },
-                Extent = extent
-            }
-        };
+                    AspectMask = ImageAspectFlags.ColorBit,
+                    BaseMipLevel = 0,
+                    LevelCount = 1,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1
+                }
+            };
+
+            vk.CmdPipelineBarrier(commandBuffer,
+                                  PipelineStageFlags.TopOfPipeBit,
+                                  PipelineStageFlags.ColorAttachmentOutputBit,
+                                  0,
+                                  null,
+                                  0,
+                                  null,
+                                  1,
+                                  &imageMemoryBarrier1);
+        }
 
         ClearValue[] clearValues =
         [
@@ -1840,10 +1896,48 @@ public unsafe class MultisamplingApplication : IDisposable
             }
         ];
 
-        renderPassBeginInfo.ClearValueCount = (uint)clearValues.Length;
-        renderPassBeginInfo.PClearValues = (ClearValue*)Unsafe.AsPointer(ref clearValues[0]);
+        RenderingAttachmentInfo colorAtt = new()
+        {
+            SType = StructureType.RenderingAttachmentInfo,
+            ImageView = colorImageView,
+            ImageLayout = ImageLayout.AttachmentOptimal,
+            ResolveImageView = swapchainImageViews[imageIndex],
+            ResolveImageLayout = ImageLayout.AttachmentOptimal,
+            ResolveMode = ResolveModeFlags.AverageBit,
+            LoadOp = AttachmentLoadOp.Clear,
+            StoreOp = AttachmentStoreOp.DontCare,
+            ClearValue = clearValues[0]
+        };
 
-        vk.CmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, SubpassContents.Inline);
+        RenderingAttachmentInfo depthAtt = new()
+        {
+            SType = StructureType.RenderingAttachmentInfo,
+            ImageView = depthImageView,
+            ImageLayout = ImageLayout.AttachmentOptimal,
+            LoadOp = AttachmentLoadOp.Clear,
+            StoreOp = AttachmentStoreOp.DontCare,
+            ClearValue = clearValues[1]
+        };
+
+        RenderingInfo renderingInfo = new()
+        {
+            SType = StructureType.RenderingInfo,
+            RenderArea = new Rect2D
+            {
+                Offset = new Offset2D
+                {
+                    X = 0,
+                    Y = 0
+                },
+                Extent = extent
+            },
+            LayerCount = 1,
+            ColorAttachmentCount = 1,
+            PColorAttachments = &colorAtt,
+            PDepthAttachment = &depthAtt
+        };
+
+        khrDynamicRendering.CmdBeginRendering(commandBuffer, &renderingInfo);
 
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, graphicsPipeline);
 
@@ -1872,7 +1966,38 @@ public unsafe class MultisamplingApplication : IDisposable
         vampire.Record(commandBuffer, pipelineLayout, camera);
         yousa.Record(commandBuffer, pipelineLayout, camera);
 
-        vk.CmdEndRenderPass(commandBuffer);
+        khrDynamicRendering.CmdEndRendering(commandBuffer);
+
+        {
+            ImageMemoryBarrier imageMemoryBarrier = new()
+            {
+                SType = StructureType.ImageMemoryBarrier,
+                SrcAccessMask = AccessFlags.ColorAttachmentWriteBit,
+                OldLayout = ImageLayout.ColorAttachmentOptimal,
+                NewLayout = ImageLayout.PresentSrcKhr,
+                Image = swapchainImages[imageIndex],
+                SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+                SubresourceRange = new ImageSubresourceRange
+                {
+                    AspectMask = ImageAspectFlags.ColorBit,
+                    BaseMipLevel = 0,
+                    LevelCount = 1,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1
+                }
+            };
+
+            vk.CmdPipelineBarrier(commandBuffer,
+                                  PipelineStageFlags.ColorAttachmentOutputBit,
+                                  PipelineStageFlags.BottomOfPipeBit,
+                                  0,
+                                  null,
+                                  0,
+                                  null,
+                                  1,
+                                  &imageMemoryBarrier);
+        }
 
         if (vk.EndCommandBuffer(commandBuffer) != Result.Success)
         {
@@ -1886,11 +2011,9 @@ public unsafe class MultisamplingApplication : IDisposable
     private void RecreateSwapChain()
     {
         Vector2D<int> size = window.FramebufferSize;
-        while (size.X == 0 || size.Y == 0)
+        if (size.X == 0 || size.Y == 0)
         {
-            size = window.FramebufferSize;
-
-            window.DoEvents();
+            return;
         }
 
         vk.DeviceWaitIdle(device);

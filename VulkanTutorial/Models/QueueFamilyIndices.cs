@@ -29,6 +29,9 @@ public readonly unsafe struct QueueFamilyIndices
             if (queueFamilies[i].QueueFlags.HasFlag(QueueFlags.GraphicsBit))
             {
                 GraphicsFamily = (uint)i;
+                PresentFamily = (uint)i;
+
+                break;
             }
 
             Bool32 presentSupport;
